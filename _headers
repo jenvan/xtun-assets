@@ -1,0 +1,37 @@
+# Cloudflare Pages 自定义响应头
+#
+# ⚠️ 这个文件必须【和 noVNC 资源放在同一目录】，随 Pages 项目一起上传。
+#    Pages 不会把它当作静态资源返回，而是解析成响应头规则。
+#
+# 为什么需要它：
+#   noVNC 的页面由 gw.xtun.dev 返回，但它内部的 JS 是【ES module】，
+#   会从 assets.xtun.dev 跨域加载 core/rfb.js、app/ui.js 等模块。
+#   浏览器的模块加载受 CORS 约束 —— 资源站不回 Access-Control-Allow-Origin
+#   就会被直接拦掉，表现为：
+#     Access to script at 'https://assets.xtun.dev/app/ui.js'
+#     from origin 'https://gw.xtun.dev' has been blocked by CORS policy
+#   页面随后卡在加载态，连不上 /ws（看起来像"隧道连不上"，其实隧道没问题）。
+#
+# 安全说明：这里放的是 noVNC 前端静态资源，本身不含任何凭据，
+#   且真正的鉴权在 Worker 侧（TOTP + 签名 cookie），
+#   所以允许任意源读取这些静态文件是安全的。
+
+# ====================================================================
+# ⚠️ 只能有【一条】规则，不要按目录再写第二条！
+#
+# Pages 的规则是【叠加】的：一个请求若同时匹配多条规则，
+# 同名头会被拼接（官方原文："If a header is applied twice in the
+# _headers file, the values are joined with a comma separator"）。
+#
+# 曾经踩过的坑：写了 /* 又写 /app/* 和 /app/styles/*，结果
+#   /app/ui.js                → "*, *"        （2 条叠加）
+#   /app/styles/Orbitron.woff → "*, *, *"     （3 条叠加）
+# 而 CORS 规定 ACAO 只能有一个值，于是浏览器报：
+#   "The 'Access-Control-Allow-Origin' header contains multiple values
+#    '*, *', but only one is allowed."
+# 比不加还糟 —— 加了头反而全被拦。
+# ====================================================================
+
+/*
+  Access-Control-Allow-Origin: *
+  Vary: Origin

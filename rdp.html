@@ -1,0 +1,318 @@
+<!doctype html>
+<!-- xtun-rdp -->
+<!--
+  由 Worker（x-edge.js）或自建中继（xrelay）从资源站取回，返回前替换三个占位符：
+    __RDP_WS_PATH__  浏览器要连的 WS 路径（同源，含设备名与 proto=rdp）
+    __RDP_DEVICE__   设备名（仅用于显示）
+    __ASSETS__       静态资源站地址（IronRDP 产物所在处）
+
+  ⚠️ 这个文件【上传到资源站】。它不在 Worker 的降级逻辑里 ——
+     取不到时 Worker 会用内置的提示页（见 serveRdpPage）。
+
+  ⚠️⚠️ 三个必做步骤（漏一个就白屏或直接抛异常，见 docs/rdp-tunnel.md 6.3）：
+      1. await init(logLevel)          —— 来自 RDP 后端包，不是 base 包
+      2. 给元素赋 module = Backend
+      3. ui.setVisibility(true)        —— 组件默认 isVisible=false → 黑屏
+     另外 withAuthToken("") 空串会在 build() 直接抛异常。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RDP — 远程桌面</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #16161a; color: #e9e9ec;
+  }
+
+  /* ---- 登录 / 连接表单 ---- */
+  #panel {
+    position: absolute; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: #16161a;
+  }
+  .card {
+    width: 100%; max-width: 420px; background: #1e1e24;
+    border: 1px solid #2e2e37; border-radius: 14px; padding: 28px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  }
+  h1 { margin: 0 0 6px; font-size: 19px; font-weight: 650; }
+  .sub { margin: 0 0 20px; color: #82828f; font-size: 13px; }
+  label { display: block; margin: 14px 0 6px; font-size: 13px; color: #b9b9c6; }
+  input {
+    width: 100%; padding: 11px 13px; font-size: 15px;
+    background: #16161a; color: #e9e9ec;
+    border: 1px solid #33333d; border-radius: 9px;
+  }
+  input:focus { outline: none; border-color: #5b7cfa; }
+  button {
+    width: 100%; margin-top: 22px; padding: 12px; font-size: 15px; font-weight: 600;
+    color: #fff; background: #3b5bdb; border: 0; border-radius: 9px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #4c6ef5; }
+  button:disabled { opacity: .55; cursor: default; }
+  .warn {
+    margin-top: 18px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55;
+    background: #2a2113; border: 1px solid #4a3a1a; border-radius: 9px; color: #e8c88a;
+  }
+  .err {
+    margin-top: 14px; padding: 11px 13px; font-size: 13px;
+    background: #2c1a1c; border: 1px solid #5a2a2f; border-radius: 9px; color: #ff9a9a;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .hint { margin-top: 16px; font-size: 12px; color: #6b6b78; text-align: center; }
+  .hint a { color: #82828f; }
+
+  /* ---- 远程桌面画布 ---- */
+  #screen { width: 100%; height: 100%; display: none; }
+  #screen.on { display: block; }
+  iron-remote-desktop { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<!-- 连接表单：TOTP 已在 /rdp 页面入口校验过；这里填的是【Windows 的账号密码】 -->
+<div id="panel">
+  <form class="card" id="form">
+    <h1>远程桌面</h1>
+    <p class="sub">设备 <b id="devname">__RDP_DEVICE__</b></p>
+
+    <label for="user">用户名</label>
+    <input id="user" name="user" autocomplete="username"
+           placeholder="用户名，域账号可写 域\用户名" required>
+
+    <label for="pass">密码</label>
+    <input id="pass" name="pass" type="password"
+           autocomplete="current-password" required>
+
+    <button type="submit" id="go">连接</button>
+
+    <div class="warn">
+      ⚠️ Windows 只允许一个活动的远程桌面会话：<br>
+      连接会<b>接管当前会话</b>，本机（或别处）已登录的会话会被断开。
+    </div>
+
+    <div class="err" id="err" hidden></div>
+
+    <p class="hint"><a href="/">返回设备列表</a></p>
+  </form>
+</div>
+
+<!-- 画布：连上后显示。
+     ⚠️ <iron-remote-desktop> 【不写死在这里】—— 由脚本在设好 module 之后
+     动态创建并 append（原因见下面脚本里的 (a)(b)(c)）。 -->
+<div id="screen"></div>
+
+<script type="module">
+// ---------------------------------------------------------------------
+// IronRDP 接线
+// ---------------------------------------------------------------------
+//
+// 产物来自资源站（官方 npm 包，**无需构建**；见 docs/rdp-tunnel.md 6.1）：
+//   iron-remote-desktop.js      —— 注册 <iron-remote-desktop> 元素
+//                                  (@devolutions/iron-remote-desktop@0.11.0)
+//   iron-remote-desktop-rdp.js  —— RDP 后端，导出 init/Backend
+//                                  (@devolutions/iron-remote-desktop-rdp@0.7.0)
+//
+// ⚠️ init 与 Backend 都来自【RDP 后端包】，基础包里没有这两个导出。
+// ✅ 两个包都是**零 import 的自包含模块**，wasm 也已 base64 内联在里面，
+//    因此**不需要 import map**（曾担心 wasm 走裸标识符，实测不成立）。
+
+import { init, Backend } from "__ASSETS__/iron-remote-desktop-rdp.js";
+import "__ASSETS__/iron-remote-desktop.js";
+
+const WS_PATH = "__RDP_WS_PATH__";
+// auth_token 是 IronRDP 的【必填】字段（空串会在 build() 抛异常）。
+// Go 侧不校验它 —— 准入已由 TOTP cookie 在 /ws 握手时完成。
+// 安全级别与 VNC 相同，见 docs/rdp-tunnel.md 7.3。
+const AUTH_TOKEN = "xtun";
+
+const panel = document.getElementById("panel");
+const screen = document.getElementById("screen");
+const form = document.getElementById("form");
+const errBox = document.getElementById("err");
+const goBtn = document.getElementById("go");
+
+let ui = null;
+let session = null;
+
+function showError(msg) {
+  errBox.hidden = false;
+  errBox.textContent = String(msg);
+  goBtn.disabled = false;
+  goBtn.textContent = "连接";
+}
+
+/**
+ * 把 IronRDP 抛出的错误变成人能读的文字。
+ *
+ * ⚠️⚠️ 为什么不能只写 `err.message`：IronRDP 的错误是 **wasm 对象**，
+ * 没有 `message` 属性 —— 直接 `String(err)` 只会得到 `[object Object]`，
+ * 用户完全不知道发生了什么（真机联调时线上就是这个现象）。
+ *
+ * wasm 错误对象上真正有用的是三个方法：
+ *   kind()                错误类别（数字）
+ *   backtrace()           可读的原因，例如
+ *                         "read RDCleanPath request: not enough bytes"
+ *                         或 "failed to connect to wss://... (WebSocket is `Closed`)"
+ *   rdcleanpathDetails()  RDCleanPath 层的细节（有则更好）
+ *
+ * ⚠️ 另外要提醒一个**协议层的事实**：RDCleanPath 的 error 结构里
+ * **没有「文字原因」字段**（只有 error_code / http_status / wsa / tls_alert）。
+ * 所以「家里连不上 3389（connection refused）」这类原因**到不了浏览器** ——
+ * 它只出现在 agent 的日志里。页面这里能拿到的最多是 RDCleanPath 的
+ * 解析/连接层原因；「目标连不上」要去 **agent 日志**看。
+ */
+function describeError(err) {
+  if (err == null) return "未知错误";
+  if (typeof err === "string") return err;
+
+  const parts = [];
+  if (typeof err.backtrace === "function") {
+    try {
+      const bt = err.backtrace();
+      if (bt) parts.push(String(bt));
+    } catch (_) {}
+  }
+  if (typeof err.rdcleanpathDetails === "function") {
+    try {
+      const d = err.rdcleanpathDetails();
+      if (d != null) parts.push("RDCleanPath: " + String(d));
+    } catch (_) {}
+  }
+  if (!parts.length && err.message) parts.push(String(err.message));
+  if (!parts.length) {
+    try {
+      parts.push(JSON.stringify(err));
+    } catch (_) {
+      parts.push(String(err));
+    }
+  }
+  if (!parts.length || parts[0] === "[object Object]") {
+    parts.push("连接失败（详情见 agent 日志；RDCleanPath 不携带文字原因）");
+  }
+  // 提示排查方向：最常见的就是「目标连不上」，而它只记在 agent 日志里
+  parts.push(
+    "\n\n排查提示：若为「连不上目标」，请查看家里 agent 的日志 —— " +
+      "RDCleanPath 协议不把文字原因回传给浏览器。",
+  );
+  return parts.join("\n");
+}
+
+/** 同源 wss 地址：页面留在本域，因此不需要知道网关域名 */
+function proxyUrl() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return proto + "//" + location.host + WS_PATH;
+}
+
+/** 用户名里的 域\用户 拆成 username + serverDomain */
+function splitUser(raw) {
+  const s = String(raw || "").trim();
+  const i = s.indexOf("\\");
+  if (i > 0) return { username: s.slice(i + 1), domain: s.slice(0, i) };
+  const j = s.indexOf("@");
+  if (j > 0) return { username: s.slice(0, j), domain: s.slice(j + 1) };
+  return { username: s, domain: "" };
+}
+
+// 1) 初始化 wasm → 动态创建组件 → 赋 module → **最后**才挂载
+//
+// ⚠️⚠️ 这个顺序是三处坑连着踩出来的，**不要**改回「在 HTML 里静态写一个
+//      <iron-remote-desktop>」（那样 (a)(b) 两坑必中）：
+//
+//  (a) ready 是【一次性】事件，且要等监听挂上才有人在听。
+//      组件在挂载后一个微任务就 dispatch("ready")；若先 `await init()`、
+//      再挂监听，await 让出 JS 栈的那段时间 ready 早发过了 —— 页面里的
+//      `ui` 永远是 null，点「连接」只会报「IronRDP 尚未就绪，请稍候」。
+//      （实测事件顺序：READY-FIRED 排在页面 addListener 之前。）
+//
+//  (b) 组件实例脚本里 `a = new Un(o())` 在【挂载那一刻取一次 module 快照】，
+//      之后再改 `el.module` **不会回填** —— 挂载后才赋值的话，
+//      `connect()` 直接抛：
+//        Cannot read properties of undefined (reading 'SessionBuilder')
+//
+//  (c) 静态写在 HTML 里的元素，在 import 基础包（customElements.define）时
+//      就被升级并挂载了 —— 那时既没挂监听、也没赋 module，(a)(b) 全中。
+//      所以：先 createElement → 挂 ready 监听 → 赋 module → 最后 appendChild。
+let el = null;
+try {
+  await init("WARN");
+
+  el = document.createElement("iron-remote-desktop");
+  el.id = "rdp";
+  el.setAttribute("scale", "fit");
+  el.setAttribute("flexcenter", "true");
+
+  el.addEventListener("ready", (e) => {
+    ui = e.detail.irgUserInteraction;
+    // ⚠️⚠️ 组件默认 isVisible = false → 不调用就是纯黑屏
+    ui.setVisibility(true);
+  });
+
+  // ⚠️ 必须在 appendChild 之前 —— 见上面 (b)
+  el.module = Backend;
+  screen.appendChild(el);
+} catch (err) {
+  console.error("IronRDP 初始化失败", err);
+  showError(
+    "IronRDP 资源加载失败。\n" +
+    "请确认资源站已上传 iron-remote-desktop.js / iron-remote-desktop-rdp.js / *.wasm。\n" +
+    "（" + err + "）"
+  );
+}
+
+// 3) 提交表单 → 建会话
+form.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  errBox.hidden = true;
+
+  if (!ui) return showError("IronRDP 尚未就绪，请稍候或刷新页面");
+
+  const { username, domain } = splitUser(document.getElementById("user").value);
+  const password = document.getElementById("pass").value;
+
+  goBtn.disabled = true;
+  goBtn.textContent = "连接中…";
+
+  try {
+    const builder = ui.configBuilder()
+      .withUsername(username)
+      .withPassword(password)
+      .withDestination("127.0.0.1:3389")   // 实际目标由家里 agent 的 -rdp 决定
+      .withProxyAddress(proxyUrl())
+      .withAuthToken(AUTH_TOKEN)
+      .withDesktopSize({ width: 1920, height: 1080 });
+
+    if (domain) builder.withServerDomain(domain);
+
+    const config = builder.build();
+
+    // 切到画布
+    panel.style.display = "none";
+    screen.classList.add("on");
+
+    session = await ui.connect(config);
+    await session.run();
+  } catch (err) {
+    console.error("RDP 连接失败", err);
+    screen.classList.remove("on");
+    panel.style.display = "flex";
+    // ⚠️ 不能只取 err.message —— IronRDP 的 wasm 错误没有它，会显示 [object Object]
+    showError(describeError(err));
+  }
+});
+</script>
+
+<!--
+  ✅ 这里【不需要】import map。
+  曾担心 iron-remote-desktop-rdp.js 会用裸标识符引用 wasm 模块
+  （wasm-pack 生成的胶水通常如此），实测该包是零 import 的自包含模块，
+  wasm 已 base64 内联，浏览器不会报 "Failed to resolve module specifier"。
+  详见 docs/rdp-tunnel.md 6.4。
+-->
+</body>
+</html>
