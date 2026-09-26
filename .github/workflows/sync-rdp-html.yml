@@ -1,0 +1,86 @@
+# 把主仓库（private：jenvan/cloudflare-proxy）里的 pages-assets/rdp.html
+# 同步到本仓库。
+#
+# 为什么需要它：`rdp.html` 的【唯一源】在主仓库（`npm run test:rdp` 直接读它做断言、
+# `npm run check:deploy` 拿它做线上 sha256 基准）；本仓库只是它的**发布物**
+# —— `assets.xtun.dev/rdp.html` 就是网关 `/rdp` 页面要取的那份。
+#
+# ⚠️ 主仓库是 private，读它需要一个有权限的 token：
+#    在本仓库 Settings → Secrets and variables → Actions 里加：
+#
+#      SRC_REPO_TOKEN = 一个 fine-grained PAT
+#        · Resource owner: jenvan
+#        · Repository access: 仅 jenvan/cloudflare-proxy
+#        · Permissions: Contents → Read-only（**只读就够**）
+#
+# ⚠️ 没配这个 secret 时本 workflow 会**明确报错**（不是静默跳过）——
+#    「配错了不静默」是本项目的原则。
+#
+# 触发：
+#   · workflow_dispatch  —— 手动
+#   · schedule 每小时一次 —— 兜底（改了主仓库后最多一小时自动跟上）
+#   · repository_dispatch: rdp-updated —— 主仓库主动通知
+#     （要在主仓库那边配一个能调本仓库 API 的 token 才会发；不配也不影响兜底）
+name: Sync rdp.html from main repo
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+  repository_dispatch:
+    types: [rdp-updated]
+
+# 同一时刻只跑一个，避免并发推送打架
+concurrency:
+  group: sync-rdp-html
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 取主仓库的 rdp.html
+        env:
+          TOKEN: ${{ secrets.SRC_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::未配置 SRC_REPO_TOKEN。请到 Settings → Secrets and variables → Actions 添加一个对 jenvan/cloudflare-proxy 有 Contents:Read 的 fine-grained PAT。"
+            exit 1
+          fi
+          curl -fsSL --max-time 60 --retry 3 \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/jenvan/cloudflare-proxy/contents/pages-assets/rdp.html?ref=main" \
+            -o /tmp/rdp.html
+
+      - name: 校验（拿到的必须真的是我们的页面）
+        run: |
+          set -euo pipefail
+          # ⚠️ 先验再落盘：万一是 404 页 / 权限错误页 / 别的东西，绝不能覆盖已发布的
+          for marker in '<!-- xtun-rdp -->' '__RDP_WS_PATH__' '__RDP_DEVICE__' '__ASSETS__'; do
+            grep -qF "$marker" /tmp/rdp.html || {
+              echo "::error::取回的文件缺少标记 $marker —— 拒绝覆盖，rdp.html 保持原样"
+              exit 1
+            }
+          done
+          echo "✅ 标记齐全，大小 $(wc -c < /tmp/rdp.html) 字节"
+
+      - name: 有变化才提交（提交会自动触发 Pages 重新发布）
+        run: |
+          set -euo pipefail
+          if cmp -s /tmp/rdp.html rdp.html; then
+            echo "与线上一致，无需改动"
+            exit 0
+          fi
+          cp /tmp/rdp.html rdp.html
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rdp.html
+          git commit -m "sync: 从 cloudflare-proxy 同步 rdp.html（唯一源在该仓库）"
+          git push
