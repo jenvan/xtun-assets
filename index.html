@@ -1,1 +1,94 @@
-Hello xtun ~
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>xtun —— 正向代理与反向隧道</title>
+<!--
+  本文件是资源站的首页（https://assets.xtun.dev/），也是**网关未登录首页的基底**：
+  网关会把它取回、注入「双击 / 长按 → /login」的脚本再返回（见 x-edge.js 的
+  injectLoginGesture）。因此两条约束：
+    ⚠️ 不要在 document 上再占用 dblclick —— 那个手势已被注入的脚本用掉了。
+    ⚠️ 只用绝对 URL（https: 开头）或 # 锚点做链接：Worker 返回前会跑
+       rewriteAssetPaths，把相对引用改写成资源站地址。
+  唯一源：cloudflare-proxy 仓库的 pages-assets/index.html（本文件由 CI 同步过来）。
+-->
+<style>
+  *{box-sizing:border-box}
+  :root{
+    --bg:#16161a; --card:#1e1e24; --line:#2e2e37;
+    --fg:#e9e9ec; --dim:#9a9aa5; --accent:#5b7cfa; --accent-soft:#93a8ff;
+  }
+  html,body{margin:0}
+  body{
+    min-height:100vh; display:flex; flex-direction:column; color:var(--fg);
+    background:radial-gradient(1100px 560px at 50% -12%, #242438 0%, var(--bg) 58%) no-repeat, var(--bg);
+    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%; max-width:900px; margin:0 auto; padding:clamp(30px,7vw,76px) 20px 44px}
+  header{text-align:center; margin-bottom:clamp(26px,5vw,42px)}
+  h1{font-size:clamp(32px,7vw,46px); font-weight:700; letter-spacing:-.02em; margin:0 0 10px}
+  h1 .dot{color:var(--accent)}
+  .tagline{margin:0; color:var(--dim); font-size:clamp(14px,2.6vw,17px)}
+  .enter{
+    display:inline-flex; align-items:center; gap:9px; margin-top:24px;
+    padding:12px 20px; border-radius:11px; text-decoration:none; font-weight:600;
+    color:#fff; background:var(--accent);
+    box-shadow:0 8px 24px -10px rgba(91,124,250,.9);
+  }
+  .enter:hover{background:#6d8bfb}
+  .enter:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
+  .hint{margin:14px auto 0; max-width:40em; color:var(--dim); font-size:13px}
+  .nowrap{white-space:nowrap}
+  .hint strong{color:var(--fg)}
+  kbd{
+    background:#26262e; border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:6px; padding:1px 6px; font:inherit; font-size:12.5px; color:var(--fg);
+  }
+  /* ⚠️ 最小宽给到 320px：这样 900px 容器里正好 2 列（2×2 平衡），
+     窄屏自动落成 1 列。给太小会变成 3+1，最后一张孤零零 */
+  .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 18px 16px}
+  .card h2{margin:0 0 7px; font-size:15.5px}
+  .card p{margin:0; color:var(--dim); font-size:13.5px; line-height:1.65}
+  .k{color:var(--accent-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px}
+  footer{margin-top:auto; padding:26px 20px 30px; text-align:center; color:#6b6b77; font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>xtun<span class="dot">.</span></h1>
+    <p class="tagline">正向代理 + 反向隧道：把家里的服务，安全地带到外面。</p>
+    <a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
+    <p class="hint">
+      已在网关上登录过？<strong>双击页面任意处</strong>
+      <span class="nowrap">（手机<strong>长按 0.6 秒</strong>）</span>
+      <span class="nowrap">→ 回到设备列表</span>
+    </p>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>正向代理</h2>
+      <p>浏览器 <span class="k">SOCKS5</span> → 本地中转 → CF 边缘出网。TLS 端到端，不做 MITM。</p>
+    </section>
+    <section class="card">
+      <h2>VNC 远程桌面</h2>
+      <p>外网用浏览器控制家里电脑；noVNC 官方页面，缩放 / 画质 / 剪贴板都在。</p>
+    </section>
+    <section class="card">
+      <h2>RDP 远程桌面</h2>
+      <p>Windows 远程桌面走 <span class="k">RDCleanPath</span>（IronRDP 前端），与 VNC 并存。</p>
+    </section>
+    <section class="card">
+      <h2>HTTP 内网穿透</h2>
+      <p>把内网网站挂到 <span class="k">&lt;设备&gt;.xtun.dev</span>，含 WebSocket 透传。</p>
+    </section>
+  </main>
+</div>
+<footer>反向隧道可跑在 Cloudflare Worker，也可自建中继</footer>
+</body>
+</html>
