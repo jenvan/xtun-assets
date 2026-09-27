@@ -18,9 +18,15 @@
 
 - **触发**：push main 且动了 `pages-assets/**`（日常走这条）／`release: published`（兜一次）／手动
 - **清单**：`git ls-files pages-assets/` —— 往本目录加文件并提交即可同步，**不用改 workflow**
-- ⚠️⚠️ **新文件必须先在 `.gitignore` 里加例外**（`!pages-assets/<文件名>`）：
-  本目录整体是 ignored 的，漏了例外 → 文件只在本地躺着、`git add -A` 不收、
-  同步永远带不上它，**而且不会有任何报错**（第一次做同步测试就踩了这个坑）
+- ✅ **本目录整体入库**（`.gitignore` 里故意不写 `pages-assets/*`）：往这里放什么都会
+  自动带上，不必逐个补例外
+  - ❌ 旧的写法是「整目录忽略 + 逐个补 `!` 例外」，漏补一条 = **静默不同步**
+    （文件在本地、线上永远没有、**没有任何报错**）—— 2026-09-26 踩过，还误以为是
+    workflow 坏了
+  - ⚠️ 例外现在**反过来列**：**第三方产物被显式排除**（`core/` `app/` `vendor/` `po/`
+    `tests/` `utils/` `docs/` `snap/`、两个 IronRDP js，以及 `vnc.html`/`vnc_lite.html`）
+    —— 别把整套 noVNC 拷回本目录，`git add -A` 会吞掉它
+- ⚠️ workflow 另有一道 **2 MB 体积护栏**：单个文件超限就**明确报错**，不静默推送
 - ⚠️ **只覆盖同名文件、不删除** `xtun-assets` 里的其他文件
 - ⚠️ 同步前会校验 `rdp.html` 的四个标记（`<!-- xtun-rdp -->`、`__RDP_WS_PATH__`、
   `__RDP_DEVICE__`、`__ASSETS__`）—— 缺了就**拒绝同步**，宁可不同步也不让线上页面变白
