@@ -49,11 +49,13 @@
   h1{font-size:clamp(32px,7vw,46px); font-weight:700; letter-spacing:-.02em; margin:0 0 10px}
   h1 .dot{color:var(--accent)}
   .tagline{margin:0; color:var(--dim); font-size:clamp(14px,2.6vw,17px)}
-  /* ⚠️ 最小宽给到 320px：900px 容器里正好 2 列（2×2 平衡），窄屏自动落成 1 列 */
+  /* ⚠️ 最小宽给到 320px：900px 容器里正好 2 列 —— 四张【协议】卡片排成 2×2。
+     下面的「自建中继」是部署形态（不是第 4 个协议），用 .wide 通栏另起一行。 */
   .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
   .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 18px 16px}
   .card h2{margin:0 0 7px; font-size:15.5px}
   .card p{margin:0; color:var(--dim); font-size:13.5px; line-height:1.65}
+  .card.wide{grid-column:1/-1}
   .k{color:var(--accent-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px}
 </style>
 </head>
@@ -82,6 +84,14 @@
     <section class="card">
       <h2>HTTP 内网穿透</h2>
       <p>把内网网站挂到 <span class="k">&lt;设备&gt;.xtun.dev</span>，含 WebSocket 透传。</p>
+    </section>
+
+    <!-- 部署形态（不是第 4 个协议）：通栏另起一行 -->
+    <section class="card wide">
+      <h2>自建中继（可选）</h2>
+      <p>三条穿透服务的会合点都可以放到自己的 <span class="k">VPS</span>（<span class="k">-relay-url</span>）：
+         同城一跳直连、不绕 CF 边缘，家里和公司都在内网时更稳；
+         中继域与网关域可同时访问<strong>同一个</strong>服务（双入口）。</p>
     </section>
   </main>
 </div>
