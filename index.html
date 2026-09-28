@@ -47,18 +47,17 @@
   }
   .enter:hover{background:#6d8bfb}
   .enter:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
-  /* 容器尽量宽 + 顶部留白压小：目标是一屏放下（1600×900）。
-     ⚠️ margin:auto（而不是 justify-content:center）—— 有余量时上下居中，
-     内容比视口高时自动退化成「从顶部开始正常排布」并可滚动；
-     用 justify-content:center 的话溢出方向会被裁掉、滚不到顶。 */
-  .wrap{width:100%; max-width:1240px; margin:auto; padding:clamp(26px,3.2vw,40px) clamp(16px,2vw,26px) 22px}
-  header{text-align:center; margin-bottom:clamp(14px,1.6vw,20px)}
+  /* 容器尽量宽 + 【顶对齐】：内容靠上排（用户要求「整体往上来一点」），
+     不垂直居中 —— 居中会同时把顶部推开、底部留一大块，反而显得上面的总结离卡片太远或太近。
+     ⚠️ 顶部内边距不能太小：右上角那个 fixed 按钮就钉在 top:--edge 上。 */
+  .wrap{width:100%; max-width:1240px; margin:0 auto; padding:clamp(38px,4.6vw,56px) clamp(16px,2vw,26px) 26px}
+  header{text-align:center; margin-bottom:clamp(28px,3.2vw,42px)}
   /* 顶部标志：左边图形 + 右边 xtun，居中成一组 */
   .logo{display:flex; align-items:center; justify-content:center; gap:clamp(7px,1vw,11px); margin-bottom:8px}
   .logo svg{width:clamp(32px,3.4vw,42px); height:auto; flex:none}
   h1{font-size:clamp(26px,3vw,34px); font-weight:700; letter-spacing:-.02em; margin:0}
   h1 .dot{color:var(--accent)}
-  .tagline{margin:0 0 9px; color:var(--fg); font-size:clamp(15px,1.5vw,17px); font-weight:600}
+  .tagline{margin:0 0 12px; color:var(--fg); font-size:clamp(15px,1.5vw,17px); font-weight:600}
   .lead{margin:0 auto; max-width:1000px; color:var(--dim); font-size:14px; line-height:1.7; text-align:left}
   .lead b{color:var(--fg); font-weight:600}
   .lead .k{color:var(--accent-soft)}
@@ -73,13 +72,24 @@
   @media (min-width:640px){ .grid{grid-template-columns:1fr 1fr} }
   /* 超宽屏（≥1900）才排一行四张 —— 这时把容器也放宽，否则卡片会太窄 */
   @media (min-width:1900px){ .wrap{max-width:1700px} .grid{grid-template-columns:repeat(4,1fr)} }
-  .card{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:15px 16px 14px}
-  .card h2{margin:0 0 3px; font-size:15px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:13px 15px 12px}
+  .card h2{margin:0 0 3px; font-size:14.5px}
   /* 卡片标题下的一行「它解决什么」 */
   .card .use{margin:0 0 8px; color:var(--accent-soft); font-size:12.5px}
-  .card p.body{margin:0; color:var(--dim); font-size:13.5px; line-height:1.68}
+  .card p.body{margin:0; color:var(--dim); font-size:13px; line-height:1.66}
   .card.wide{grid-column:1/-1}
   .k{color:var(--accent-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px}
+  /*
+    矮屏再压一档：1366×768 这类笔记本去掉浏览器工具栏后**视口只有 ~650px**，
+    上面那套间距在那个高度会溢出一点点（要拖滚动条）。这里只压间距与字号，不动结构。
+    1600×900（视口 ~790）不命中，保持宽松版式。
+  */
+  @media (max-height:820px){
+    .wrap{padding-top:clamp(22px,3vw,34px)}
+    header{margin-bottom:clamp(18px,2.4vw,26px)}
+    .card{padding:11px 14px 10px}
+    .card p.body{font-size:12.5px; line-height:1.6}
+  }
 </style>
 </head>
 <body>
