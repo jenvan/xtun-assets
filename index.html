@@ -54,45 +54,56 @@
   /* 容器尽量宽 + 【顶对齐】：内容靠上排（用户要求「整体往上来一点」），
      不垂直居中 —— 居中会同时把顶部推开、底部留一大块，反而显得上面的总结离卡片太远或太近。
      ⚠️ 顶部内边距不能太小：右上角那个 fixed 按钮就钉在 top:--edge 上。 */
-  .wrap{width:100%; max-width:1240px; margin:0 auto; padding:clamp(38px,4.6vw,56px) clamp(16px,2vw,26px) 26px}
-  header{text-align:center; margin-bottom:clamp(28px,3.2vw,42px)}
+  /* ⚠️ 纵向留白一律用 vh 算：1600×900 这种高屏要把一屏用满（别缩在顶上留一大片空白），
+     矮屏又得自动收紧到不出现滚动条 —— vh 一次满足两头，比写死 px 稳。 */
+  .wrap{width:100%; max-width:1240px; margin:0 auto; padding:7.5vh clamp(16px,2vw,28px) 4vh}
+  header{text-align:center; margin-bottom:6.2vh}
   /* 顶部标志：左边图形 + 右边 xtun，居中成一组 */
   .logo{display:flex; align-items:center; justify-content:center; gap:clamp(7px,1vw,11px); margin-bottom:8px}
   .logo svg{width:clamp(32px,3.4vw,42px); height:auto; flex:none}
   h1{font-size:clamp(26px,3vw,34px); font-weight:700; letter-spacing:-.02em; margin:0}
   h1 .dot{color:var(--accent)}
-  .tagline{margin:0 0 12px; color:var(--fg); font-size:clamp(15px,1.5vw,17px); font-weight:600}
+  .tagline{margin:0 0 1.6vh; color:var(--fg); font-size:clamp(15px,1.5vw,17px); font-weight:600}
   .lead{margin:0 auto; max-width:1000px; color:var(--dim); font-size:14px; line-height:1.7; text-align:left}
   .lead b{color:var(--fg); font-weight:600}
   .lead .k{color:var(--accent-soft)}
   /*
     功能卡栅格：**固定列数**而不是 auto-fit —— auto-fit 在 1000~1300px 这种
     中间宽度会落成「3+1」，最后一行孤零零一张很难看。
-      窄屏 1 列 → ≥640px 2 列（2×2，1600×900 这种主流宽屏就走这条）
-      → ≥1900px 4 列（超宽屏，一行四张）
+      窄屏 1 列 → ≥640px 2 列（2×2）—— 再宽也不加列（见下面那段的实测理由）
     「自建中继」是部署方式（不是第 5 个功能），用 .wide 通栏另起一行。
   */
-  .grid{display:grid; gap:11px; grid-template-columns:1fr}
+  .grid{display:grid; gap:1.9vh; grid-template-columns:1fr}
   @media (min-width:640px){ .grid{grid-template-columns:1fr 1fr} }
-  /* 超宽屏（≥1900）才排一行四张 —— 这时把容器也放宽，否则卡片会太窄 */
-  @media (min-width:1900px){ .wrap{max-width:1700px} .grid{grid-template-columns:repeat(4,1fr)} }
-  .card{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:13px 15px 12px}
-  .card h2{margin:0 0 3px; font-size:14.5px}
+  /*
+    ⚠️ 不做「超宽屏一行四张」：实测 1920×1080 下那样内容只占 66%（卡片挤在一行、页面很空），
+    而两列 + 1240 容器能填到 ~80%，卡片宽度也更好读。宽屏两侧留白是正常的。
+  */
+  .card{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:2.3vh clamp(15px,1.5vw,22px) 2vh}
+  .card h2{margin:0 0 4px; font-size:15px}
   /* 卡片标题下的一行「它解决什么」 */
-  .card .use{margin:0 0 8px; color:var(--accent-soft); font-size:12.5px}
-  .card p.body{margin:0; color:var(--dim); font-size:13px; line-height:1.66}
+  .card .use{margin:0 0 9px; color:var(--accent-soft); font-size:12.5px}
+  .card p.body{margin:0; color:var(--dim); font-size:13.5px; line-height:1.7}
   .card.wide{grid-column:1/-1}
   .k{color:var(--accent-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px}
   /*
-    矮屏再压一档：1366×768 这类笔记本去掉浏览器工具栏后**视口只有 ~650px**，
-    上面那套间距在那个高度会溢出一点点（要拖滚动条）。这里只压间距与字号，不动结构。
-    1600×900（视口 ~790）不命中，保持宽松版式。
+    矮屏（≤760px）才切紧凑：1366×768 笔记本去掉工具栏后视口约 650px，
+    上面那套字号在那个高度装不下 2×2 卡片（实测溢出 113%）。只压间距与字号，不动结构。
+    ⚠️ 阈值卡在 760 而不是 820：1600×900 的真实视口（~790）**必须走宽松版式**，
+       否则会像上一版那样，明明屏幕不小、却只填 82%（越调越挤）。
   */
-  @media (max-height:820px){
-    .wrap{padding-top:clamp(22px,3vw,34px)}
-    header{margin-bottom:clamp(18px,2.4vw,26px)}
-    .card{padding:11px 14px 10px}
+  @media (max-height:760px){
+    .wrap{padding-top:3.4vh; padding-bottom:2.2vh}
+    header{margin-bottom:3vh}
+    .grid{gap:1.2vh}
+    .card{padding:1.5vh 14px 1.3vh}
+    .card h2{font-size:14px}
+    .card .use{margin:0 0 6px; font-size:12px}
     .card p.body{font-size:12.5px; line-height:1.6}
+    .tagline{margin:0 0 1.2vh; font-size:15px}
+    .lead{font-size:13px; line-height:1.62}
+    .logo svg{width:32px}
+    h1{font-size:26px}
   }
 </style>
 </head>
