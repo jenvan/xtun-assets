@@ -47,6 +47,10 @@
   }
   .enter:hover{background:#6d8bfb}
   .enter:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
+  /* 小屏：不再悬浮（否则滚动时会盖住卡片），改成总结下面的一块 —— 仍然显眼、可点 */
+  @media (max-width:640px){
+    .enter{position:static; margin-top:16px}
+  }
   /* 容器尽量宽 + 【顶对齐】：内容靠上排（用户要求「整体往上来一点」），
      不垂直居中 —— 居中会同时把顶部推开、底部留一大块，反而显得上面的总结离卡片太远或太近。
      ⚠️ 顶部内边距不能太小：右上角那个 fixed 按钮就钉在 top:--edge 上。 */
@@ -93,8 +97,6 @@
 </style>
 </head>
 <body>
-<a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
-
 <div class="wrap">
   <header>
     <div class="logo">
@@ -129,6 +131,17 @@
       二是把内网的 <b>VNC / RDP / HTTP</b> 服务按需暴露到外网，用浏览器就能访问。
       反向隧道的会合点默认在 Cloudflare，也可以换成自己的 VPS。
     </p>
+    <!--
+      「进入控制台」：
+        · 桌面 —— position:fixed 钉在右上角，不占版面；
+        · 小屏（≤640px）—— 改成页面内的一块，落在总结下面。
+      ⚠️ 小屏【不要隐藏它】：它是页面上唯一看得见的登录入口。
+         网关首页还有个「双击 / 长按 → 登录」的手势（见 x-edge.js 的 injectLoginGesture），
+         但那个手势没人会猜到，不能拿它当唯一入口。
+      ⚠️ DOM 位置放在 header 里（而不是 body 顶部）只是为了小屏时的自然顺序：
+         桌面是 fixed，DOM 在哪都不影响观感。
+    -->
+    <a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
   </header>
 
   <main class="grid">
