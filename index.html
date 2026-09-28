@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>xtun —— 在外也能用家里的电脑和服务</title>
+<title>xtun —— 代理上网与远程访问</title>
 <!--
   本文件是资源站的首页（https://assets.xtun.dev/），也是**网关未登录首页的基底**：
   网关会把它取回、注入「双击 / 长按 → 登录」的脚本再返回（见 x-edge.js 的
@@ -15,9 +15,12 @@
        <base href="<资源站>/">，相对路径会因此跑到资源站域名上去。
   唯一源：cloudflare-proxy 仓库的 pages-assets/index.html（本文件由 CI 同步过来）。
 
-  📝 文案面向【非技术读者】：先说「能干什么、解决什么问题」，再看具体功能。
-     术语只保留能帮人搜到用法的那几个（VNC / RDP / HTTP、网址格式、启动参数），
-     其余（SOCKS5、RDCleanPath、WebSocket、端口映射的实现细节…）留在 README 里。
+  📐 版式约束：**1600×900 的显示器要一屏放下，不出现滚动条**（用户要求）。
+     所以：顶部留白压到 ~36px、四张功能卡在宽屏上排成【一行四张】、高度都收紧。
+     改文案/加卡片时请顺手在 1600×900 下量一次 scrollHeight（见 CHANGELOG 里的做法）。
+
+  📝 文案面向【懂 IT 的人】：SOCKS5 / VNC / RDP / RDCleanPath / WebSocket /
+     端口映射 这些词直接用，不用解释；讲清「能干什么、和别的方案比强在哪」。
 -->
 <style>
   *{box-sizing:border-box}
@@ -25,50 +28,58 @@
     --bg:#16161a; --card:#1e1e24; --line:#2e2e37;
     --fg:#e9e9ec; --dim:#9a9aa5; --accent:#5b7cfa; --accent-soft:#93a8ff;
     /* 右上角按钮距【右边】与【上边】的距离：同一个值 → 天然等距 */
-    --edge:clamp(12px,2.5vw,22px);
+    --edge:clamp(12px,2vw,20px);
   }
   html,body{margin:0}
   body{
     min-height:100vh; display:flex; flex-direction:column; color:var(--fg);
-    background:radial-gradient(1100px 560px at 50% -12%, #242438 0%, var(--bg) 58%) no-repeat, var(--bg);
-    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:radial-gradient(1100px 520px at 50% -14%, #242438 0%, var(--bg) 58%) no-repeat, var(--bg);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     -webkit-font-smoothing:antialiased;
   }
   /* 「进入控制台」：fixed 钉在右上角，距右边与上边等距（滚动也不动） */
   .enter{
     position:fixed; top:var(--edge); right:var(--edge); z-index:10;
     display:inline-flex; align-items:center; gap:8px;
-    padding:10px 16px; border-radius:11px; font-size:14px; font-weight:600;
+    padding:9px 15px; border-radius:11px; font-size:13.5px; font-weight:600;
     color:#fff; background:var(--accent); text-decoration:none;
     box-shadow:0 8px 24px -10px rgba(91,124,250,.9);
   }
   .enter:hover{background:#6d8bfb}
   .enter:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
-  .wrap{
-    width:100%; max-width:900px; margin:0 auto; padding:clamp(64px,9vw,84px) 20px 44px;
-    display:flex; flex-direction:column;
-  }
-  header{text-align:center; margin-bottom:clamp(22px,4vw,34px)}
+  /* 容器尽量宽 + 顶部留白压小：目标是一屏放下（1600×900）。
+     ⚠️ margin:auto（而不是 justify-content:center）—— 有余量时上下居中，
+     内容比视口高时自动退化成「从顶部开始正常排布」并可滚动；
+     用 justify-content:center 的话溢出方向会被裁掉、滚不到顶。 */
+  .wrap{width:100%; max-width:1240px; margin:auto; padding:clamp(26px,3.2vw,40px) clamp(16px,2vw,26px) 22px}
+  header{text-align:center; margin-bottom:clamp(14px,1.6vw,20px)}
   /* 顶部标志：左边图形 + 右边 xtun，居中成一组 */
-  .logo{display:flex; align-items:center; justify-content:center; gap:clamp(8px,2vw,13px); margin-bottom:14px}
-  .logo svg{width:clamp(40px,8.5vw,54px); height:auto; flex:none}
-  h1{font-size:clamp(30px,6.5vw,44px); font-weight:700; letter-spacing:-.02em; margin:0}
+  .logo{display:flex; align-items:center; justify-content:center; gap:clamp(7px,1vw,11px); margin-bottom:8px}
+  .logo svg{width:clamp(32px,3.4vw,42px); height:auto; flex:none}
+  h1{font-size:clamp(26px,3vw,34px); font-weight:700; letter-spacing:-.02em; margin:0}
   h1 .dot{color:var(--accent)}
-  .tagline{margin:0 0 14px; color:var(--fg); font-size:clamp(15px,2.8vw,18px); font-weight:600}
-  .lead{margin:0 auto; max-width:660px; color:var(--dim); font-size:clamp(13.5px,2.4vw,15px); line-height:1.8; text-align:left}
+  .tagline{margin:0 0 9px; color:var(--fg); font-size:clamp(15px,1.5vw,17px); font-weight:600}
+  .lead{margin:0 auto; max-width:1000px; color:var(--dim); font-size:14px; line-height:1.7; text-align:left}
   .lead b{color:var(--fg); font-weight:600}
-  /* ⚠️ 最小宽给到 320px：900px 容器里正好 2 列 —— 四张【功能】卡片排成 2×2。
-     最下面的「自建中继」是部署方式（不是第 4 个功能），用 .wide 通栏另起一行。 */
-  .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
-  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 18px 16px}
-  .card h2{margin:0 0 3px; font-size:16px}
+  .lead .k{color:var(--accent-soft)}
+  /*
+    功能卡栅格：**固定列数**而不是 auto-fit —— auto-fit 在 1000~1300px 这种
+    中间宽度会落成「3+1」，最后一行孤零零一张很难看。
+      窄屏 1 列 → ≥640px 2 列（2×2，1600×900 这种主流宽屏就走这条）
+      → ≥1900px 4 列（超宽屏，一行四张）
+    「自建中继」是部署方式（不是第 5 个功能），用 .wide 通栏另起一行。
+  */
+  .grid{display:grid; gap:11px; grid-template-columns:1fr}
+  @media (min-width:640px){ .grid{grid-template-columns:1fr 1fr} }
+  /* 超宽屏（≥1900）才排一行四张 —— 这时把容器也放宽，否则卡片会太窄 */
+  @media (min-width:1900px){ .wrap{max-width:1700px} .grid{grid-template-columns:repeat(4,1fr)} }
+  .card{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:15px 16px 14px}
+  .card h2{margin:0 0 3px; font-size:15px}
   /* 卡片标题下的一行「它解决什么」 */
   .card .use{margin:0 0 8px; color:var(--accent-soft); font-size:12.5px}
-  .card p.body{margin:0; color:var(--dim); font-size:13.5px; line-height:1.7}
+  .card p.body{margin:0; color:var(--dim); font-size:13.5px; line-height:1.68}
   .card.wide{grid-column:1/-1}
   .k{color:var(--accent-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px}
-  .hint{margin:20px auto 0; max-width:660px; color:var(--dim); font-size:13px; line-height:1.75; text-align:center}
-  .hint b{color:var(--fg); font-weight:600}
 </style>
 </head>
 <body>
@@ -79,7 +90,7 @@
     <div class="logo">
       <!--
         标志：一个「会合点」。
-        四条连线（构成字母 x）各自连着一台设备 —— 家里/公司的机器 与 外面的浏览器，
+        四条连线（构成字母 x）各连一台设备 —— 内网的机器与外面的浏览器，
         它们在中心那个亮点会合；这正是 xtun 在做的事：把两边「联通」起来。
         ⚠️ 用【内联 SVG】而不是外部图片文件：本页会被 Worker 取回并重写资源路径，
            内联就没有任何路径/跨域问题（也不需要额外的 MIME/CORS 配置）。
@@ -101,59 +112,58 @@
       </svg>
       <h1>xtun<span class="dot">.</span></h1>
     </div>
-    <p class="tagline">人在外面，也能用家里的电脑和它上面的网站。</p>
+    <p class="tagline">一个本地中转程序 + 一个公网入口，把内网和外网接起来。</p>
     <p class="lead">
-      在家里的电脑上运行一个小程序，它会<b>主动连到外面的服务器</b>；之后你在任何地方<b>打开浏览器登录</b>，
-      就能像坐在那台电脑前一样使用它，或者打开它上面的网页服务。<br>
-      全程<b>不需要公网 IP、也不需要在路由器上开放端口</b>（很多宽带根本申请不到），
-      所以对「家里、公司都在内网」这种最常见的环境特别合适。
+      内网机器<b>主动连出去</b>，因此<b>不需要公网 IP、也不用在路由器上做端口映射</b>。于是有两件事可用：
+      一是<b>本机借服务器线路出网</b>（本地起个 <span class="k">SOCKS5</span>，浏览器配一下即可）；
+      二是把内网的 <b>VNC / RDP / HTTP</b> 服务按需暴露到外网，用浏览器就能访问。
+      反向隧道的会合点默认在 Cloudflare，也可以换成自己的 VPS。
     </p>
   </header>
 
   <main class="grid">
     <section class="card">
-      <h2>上网代理</h2>
-      <p class="use">让上网从服务器那边出去</p>
-      <p class="body">给浏览器设一个「出口」，所有网页都从服务器那边出去。
-        平时打不开的境外网站、或者想让访问看起来来自别处，用它就行 —— 设置一次，之后照常上网。</p>
+      <h2>代理上网 <span class="k">SOCKS5</span></h2>
+      <p class="use">给本机一个服务器侧出口</p>
+      <p class="body">本地起一个 SOCKS5 端口，浏览器或程序配一次就用；流量从服务器线路出网。
+        适合统一出口、给内网里不能直连外网的机器上网，或需要按需切换线路的场景 —
+        隧道内是裸字节透传，TLS 端到端、不做 MITM。</p>
     </section>
 
     <section class="card">
-      <h2>看家里电脑的屏幕 <span class="k">VNC</span></h2>
-      <p class="use">在外面操作家里的电脑</p>
-      <p class="body">用浏览器就能看到家里电脑的画面，鼠标键盘都能操作，剪贴板也能互通。
-        不用装任何客户端、不用在路由器上开端口，登录就能连 —— 远程帮家人处理电脑最省事。</p>
+      <h2>远程桌面 <span class="k">VNC</span></h2>
+      <p class="use">浏览器里操作内网机器</p>
+      <p class="body">无需公网 IP、无需端口映射，登录控制台点一下就能连。
+        用的是官方 noVNC 页面：缩放、压缩比、画质、剪贴板、全屏都在；
+        凭据按服务端要求自动切换（标准 VNC 与 macOS ARD 的账号/密码框不同）。</p>
     </section>
 
     <section class="card">
-      <h2>连 Windows 远程桌面 <span class="k">RDP</span></h2>
-      <p class="use">远程办公 / 连公司电脑</p>
-      <p class="body">同样是浏览器里操作，但走的是 Windows 自带的远程桌面，多屏、画质、文件复制等体验更贴近原生。
-        适合远程办公，或者在外面处理家里、公司那台 Windows。</p>
+      <h2>远程桌面 <span class="k">RDP</span></h2>
+      <p class="use">连公司 / 家里的 Windows</p>
+      <p class="body">同样是浏览器里操作，但走 Windows 原生远程桌面：
+        侧替浏览器做完 <span class="k">X.224</span> 协商与 TLS 终结，前端用 IronRDP。
+        多屏、画质、剪贴板更贴近原生；与 VNC 可同时开，各占一条设备条目。</p>
     </section>
 
     <section class="card">
-      <h2>把家里的网站开放出去 <span class="k">HTTP</span></h2>
-      <p class="use">给内网服务一个网址</p>
-      <p class="body">NAS 管理页、路由器后台、正在写的网站……都能分到一个网址（形如
-        <span class="k">nas.xtun.dev</span>），在外面用浏览器直接打开，不用做端口映射。
-        网页里会自动刷新的功能（聊天、看板、实时日志）也支持。</p>
+      <h2>内网服务开放 <span class="k">HTTP</span></h2>
+      <p class="use">给内网服务一个外网网址</p>
+      <p class="body">NAS 管理页、路由器后台、开发中的站点……挂到
+        <span class="k">&lt;设备&gt;.&lt;网关域&gt;</span> 就能从外网访问，不用端口映射；
+        支持流式响应与 <span class="k">WebSocket</span> 透传（看板、实时日志、应用自带的 WS 都能用）。</p>
     </section>
 
-    <!-- 部署方式（不是第 4 个功能）：通栏另起一行 -->
+    <!-- 部署方式（不是第 5 个功能）：通栏另起一行 -->
     <section class="card wide">
-      <h2>自建中转站（可选）</h2>
-      <p class="use">不想依赖公共服务器时</p>
-      <p class="body">默认通过 Cloudflare 中转。也可以换成<b>自己的服务器</b>（启动时把地址换一下即可，
-        其他设置都不用动）：家里和公司都在同一座城市时，走自己的机器往往更快更稳；
-        而且<b>两边的网址可以同时访问同一个服务</b>，哪边顺手用哪边。</p>
+      <h2>自建中继（可选）</h2>
+      <p class="use">不想依赖 Cloudflare 时</p>
+      <p class="body">反向隧道的会合点默认在 Cloudflare。也可以换成<b>自己的 VPS</b>：启动时把
+        <span class="k">-relay-url</span> 指过去即可，其余配置与客户端都不用改（复用同一个协议）。
+        家里和公司都在同一座城市时，走自己的机器往往更快更稳；
+        而且<b>中继域与网关域可同时访问同一个服务</b>，哪边顺手用哪边。</p>
     </section>
   </main>
-
-  <p class="hint">
-    第一次使用：点右上角 <b>「进入控制台」</b>，输入手机上验证器 App 显示的那 6 位数字即可登录；
-    登录后就是设备列表，点一下就能连。
-  </p>
 </div>
 </body>
 </html>
