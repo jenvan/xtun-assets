@@ -1,0 +1,29 @@
+{
+  "version": 15,
+  "assets_origin": "https://assets.xtun.dev",
+  "pins": {
+    "/": {
+      "sha256": "ac01f1b6de37e2a668a3964f6a196b24acaee71c33a90e7720b5b82bdc0a8d92",
+      "sha256Norm": "350c9d24426a3e53bd4a3d3a6ac8a27b2e3902a1b1719487dfb41e0a932e2dec",
+      "sri": "sha384-KTOcISEAZ5qL6u/cVcnGapBM5l2yBEFEr7v3deVHHqNvBmlFfdGm0qwSd66y/ApU"
+    },
+    "/vnc.html": {
+      "sha256": "5578c32792b94967a2c5ec69e44e9b450dd5dc2e5e5fa9e98ac37ecfb2255efb",
+      "sha256Norm": "51ef04f2117cc841e665ddbeca5be1ab9ef3d475197bbf11e34e19f2a5bd5463",
+      "sri": "sha384-p9xsx0f36j3JBzlHpKXrC1is3WnK9dx/4iMA1cy29bHYuTIGgwbGL29jCmKGEHXh"
+    },
+    "/rdp.html": {
+      "sha256": "cb2a63ed346b2f1dd46e14e4043019d0d3aad9eeedf3d5232d47a3309f6738ae",
+      "sha256Norm": "27f645652ff2e3c0889d8c44cbcade8ae7af4995ec9fd71674b23edf1e0ba1c8",
+      "sri": "sha384-/6Bz+mFntX8VBv0/xqIlypdAnh8ycPurb5HpasltGdgxTDdGqM4HY7UG0sOiWwTo"
+    },
+    "/iron-remote-desktop.js": {
+      "sha256": "22359dfb201017ebf7f25c2e496dbbfd1668bcad1a34d0dabfd05a968e1aa50f",
+      "sri": "sha384-rjaJNATKNJGVZd9xpcbNrNSaC3qnMB123eh+Gi52tpriL8npikM9gFbyyLq6fmAV"
+    },
+    "/iron-remote-desktop-rdp.js": {
+      "sha256": "b008f0e258fd9485c6f2b07747116d4fcbbe51053ce995abd048fb2b79636332",
+      "sri": "sha384-xl0mfGthwHkF1/UH1aqpznkAKL0HqcF6g3efR2H2lZ0RqIDyH2sT9ewZMgxlmxuy"
+    }
+  }
+}
