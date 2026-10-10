@@ -10,6 +10,7 @@
 | `index.html`（站点首页 / **网关未登录首页的基底**）| **本目录** → 由 CI 同步到 `xtun-assets` |
 | `rdp.html`（RDP 页面，**唯一源**）| **本目录** → 由 CI 同步到 `xtun-assets` |
 | 站点其余内容（noVNC 全套 / IronRDP 产物 / `CNAME`）| **`xtun-assets` 仓库**（GitHub Pages 的站点根，发布在 `assets.xtun.dev`）|
+| **`pins.json` + `pins.json.sig`**（**钉死表**：5 个入口文件的 sha256，带 Ed25519 签名）| ⚠️ **两边都不入库** —— CI **现场生成并签名**后直接上传（见下） |
 | 网关 Worker（`x-edge.js`）| 本仓库根目录 |
 
 ## 怎么同步
@@ -18,6 +19,14 @@
 
 - **触发**：push main 且动了 `pages-assets/**`（日常走这条）／`release: published`（兜一次）／手动
 - **清单**：`git ls-files pages-assets/` —— 往本目录加文件并提交即可同步，**不用改 workflow**
+  - ⚠️ **外加两个 CI 现场生成的文件**：`pins.json` 与 `pins.json.sig`。
+    它们**不在** `git ls-files` 清单里，workflow 里是**显式拷过去**的 ——
+    改动那一段时别把这两行删了，否则会**静默漏传**（现象：两端拉不到签名表 →
+    拒绝出页面，或退回旧表，看起来一切正常）
+- **签名**：`node scripts/pin-assets.mjs --sign`（用 GitHub Secret `PINS_SIGNING_KEY`，
+  版本号 = `github.run_number`）。私钥**只在** Secret 里，本地开发/换电脑都不需要接触
+- ⚠️ **`pins.json` 是端上唯一的钉死表来源**（代码里没有表）：缺了它或者签名对不上，
+  Worker 与 relay 都会**拒绝出页面**（fail-closed，唯一开关 `ASSET_PIN_ENFORCE=0`）
 - ✅ **本目录整体入库**（`.gitignore` 里故意不写 `pages-assets/*`）：往这里放什么都会
   自动带上，不必逐个补例外
   - ❌ 旧的写法是「整目录忽略 + 逐个补 `!` 例外」，漏补一条 = **静默不同步**
@@ -37,6 +46,7 @@
 ```bash
 npm run test:rdp        # 本仓库就能跑：断言 rdp.html 的标记与占位符
 npm run check:deploy    # 对线上做 sha256 比对：一眼看出「同步没跑成」还是「线上被改过」
+npm run check:assetpins # 核对「线上资源」与「线上 pins.json」是否一致（需联网）
 ```
 
 ⚠️ 改 `rdp.html` / `index.html` **只改本目录这份**（它们就是唯一源；
