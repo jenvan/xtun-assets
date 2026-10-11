@@ -37,20 +37,43 @@
     display: flex; flex-direction: column;
   }
 
-  /* 顶部细条：设备名 + 状态。终端占满其余空间。 */
-  #bar {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
-    padding: 6px 12px; background: #1e1e24; border-bottom: 1px solid #2e2e37;
-    font-size: 12.5px; color: #82828f;
+  /* 右上角【浮动】状态条（HUD）：设备名 + 连接状态。
+     ⚠️ 刻意做成小药丸 + 半透明：盖不住几行终端，鼠标移上去/出错时才完全点亮。
+     ⚠️ 必须 fixed：body 是 flex 列、终端占满剩余空间，放进流里会挤掉一整条高度。
+     ⚠️ 返回列表【不在这里】—— Worker / 中继统一注入 #xtun-back（右下角浮层，
+        见 x-edge.js 的 injectBackButton）。页面自己再放一个就是两个入口。 */
+  #hud {
+    position: fixed; top: 8px; right: 8px; z-index: 20;
+    display: flex; align-items: center; gap: 6px;
+    max-width: min(72vw, 420px); padding: 4px 9px;
+    background: rgba(24, 24, 30, .82); border: 1px solid #2e2e37; border-radius: 8px;
+    font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #82828f; opacity: .72;
+    transition: opacity .15s, border-color .15s;
+    backdrop-filter: blur(6px);
   }
-  #bar b { color: #b9b9c6; font-weight: 600; }
-  #status { margin-left: auto; }
-  #status.err { color: #ff9a9a; }
-  #status.warn { color: #ffc46b; }
-  #status.ok { color: #86efac; }
-  #bar a { color: #7cc4ff; text-decoration: none; }
+  #hud:hover, #hud:focus-within { opacity: 1; border-color: #3a3a45; }
+  /* 连上之后安静下来（省得一直挡着终端），出错/告警则保持点亮。 */
+  #hud.ok { opacity: .5; }
+  #hud.warn, #hud.err { opacity: 1; }
+  #hud.err { border-color: #5a2f2f; }
+  #devname {
+    color: #b9b9c6; font-weight: 600;
+    max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* 状态点：扫一眼就知道连上没有（颜色与 #status 的文字颜色同语义）。 */
+  #dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: #6b6b78; }
+  #hud.ok   #dot { background: #4ade80; }
+  #hud.warn #dot { background: #fbbf24; }
+  #hud.err  #dot { background: #f87171; }
+  #status {
+    max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #hud.ok   #status { color: #86efac; }
+  #hud.warn #status { color: #ffc46b; }
+  #hud.err  #status { color: #ff9a9a; }
   #retry {
-    display: none; padding: 2px 9px; font-size: 12px;
+    display: none; flex: 0 0 auto; padding: 1px 8px; font-size: 11.5px;
     background: #2a2a31; color: #e9e9ec;
     border: 1px solid #3a3a45; border-radius: 6px; cursor: pointer;
   }
@@ -63,11 +86,12 @@
 </head>
 <body>
 
-<div id="bar">
-  <span>SSH <b id="devname">__SSH_DEVICE__</b></span>
-  <span id="status">加载终端…</span>
-  <button id="retry" type="button">重新连接</button>
-  <a href="/">返回列表</a>
+<!-- 右上角浮动状态条：设备名 + 连接状态。返回列表由 Worker/中继统一注入。 -->
+<div id="hud">
+  <span id="devname">__SSH_DEVICE__</span>
+  <span id="dot" aria-hidden="true"></span>
+  <span id="status" title="" aria-live="polite">加载终端…</span>
+  <button id="retry" type="button">重连</button>
 </div>
 
 <div id="term"></div>
@@ -113,11 +137,18 @@ function frame(type, payload) {
 }
 
 const statusEl = document.getElementById("status");
+const hudEl = document.getElementById("hud");
 const retryEl = document.getElementById("retry");
 
+/**
+ * 更新状态：文字进 #status，颜色语义（ok/warn/err）挂在 #hud 上
+ * —— 状态点的颜色与文字颜色都由它派生（见上面的 CSS）。
+ */
 function setStatus(msg, kind) {
   statusEl.textContent = msg || "";
-  statusEl.className = kind || "";
+  // ⚠️ 药丸很窄，长消息会被省略号截断 —— title 让鼠标悬停时能看到完整文字。
+  statusEl.title = msg || "";
+  hudEl.className = kind || "";
 }
 
 let term = null;
