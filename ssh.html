@@ -1,0 +1,270 @@
+<!doctype html>
+<!-- xtun-ssh -->
+<!-- 唯一源：cloudflare-proxy 仓库的 pages-assets/ssh.html（本文件由 CI 同步过来，请改那份） -->
+<!--
+  由 Worker（x-edge.js）或自建中继（xrelay）从资源站取回，返回前替换三个占位符：
+    __SSH_WS_PATH__  浏览器要连的 WS 路径（同源，含设备名与 proto=ssh）
+    __SSH_DEVICE__   设备名（仅用于显示）
+    __ASSETS__       静态资源站地址（ghostty-web.js 所在处）
+
+  ⚠️ 与 rdp.html 的关键差异：**页面里没有表单**。
+     用户名、主机指纹确认、私钥口令【全部在终端里完成】——
+     这是「SSH 客户端跑在家里 agent」的直接红利（见 docs/ssh-tunnel.md §4.3）。
+
+  ⚠️ 依赖：`__ASSETS__/ghostty-web.js`（ghostty-web 0.4.0，MIT）。
+    它是**自包含 ESM**：WASM 以 base64 内联成 data URL，所以**不需要单独的
+    .wasm 文件**、也不需要 import map（实测：加载时**没有任何 `.wasm` 请求**）。
+    ⚠️ 但它**不是「零 import」**：模块里有一个包在 `try/catch` 里的
+    `import("./__vite-browser-external-2447137e.js")`（vite 给 Node 内置模块
+    生成的桩）→ 浏览器每次加载都会请求一次
+    `<资源站>/__vite-browser-external-2447137e.js` 并得到 **404**，
+    被 catch 吞掉、**不影响功能**（终端照常渲染）。
+    **别把这条 404 当成「资源站缺文件」**——完整实测与三个处理选项见
+    docs/ssh-tunnel.md §7.1a。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SSH — 终端</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #16161a; }
+  body {
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e9e9ec;
+    display: flex; flex-direction: column;
+  }
+
+  /* 顶部细条：设备名 + 状态。终端占满其余空间。 */
+  #bar {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px; background: #1e1e24; border-bottom: 1px solid #2e2e37;
+    font-size: 12.5px; color: #82828f;
+  }
+  #bar b { color: #b9b9c6; font-weight: 600; }
+  #status { margin-left: auto; }
+  #status.err { color: #ff9a9a; }
+  #status.warn { color: #ffc46b; }
+  #status.ok { color: #86efac; }
+  #bar a { color: #7cc4ff; text-decoration: none; }
+  #retry {
+    display: none; padding: 2px 9px; font-size: 12px;
+    background: #2a2a31; color: #e9e9ec;
+    border: 1px solid #3a3a45; border-radius: 6px; cursor: pointer;
+  }
+  #retry:hover { background: #34343d; }
+
+  /* 终端容器：FitAddon 按它的 clientWidth/Height 算行列。 */
+  #term { flex: 1 1 auto; min-height: 0; padding: 6px 4px 4px 8px; }
+  .xterm, canvas { outline: none; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <span>SSH <b id="devname">__SSH_DEVICE__</b></span>
+  <span id="status">加载终端…</span>
+  <button id="retry" type="button">重新连接</button>
+  <a href="/">返回列表</a>
+</div>
+
+<div id="term"></div>
+
+<script type="module">
+// ---------------------------------------------------------------------
+// Web SSH 终端接线
+// ---------------------------------------------------------------------
+//
+// 终端来自资源站（官方 npm 包，无需构建）：
+//   ghostty-web.js  —— ghostty-web 0.4.0（MIT，自包含 ESM）
+//   ⚠️ WASM 以 base64 内联成 data URL → 不需要单独的 .wasm 文件，
+//      实测加载时【没有任何 .wasm 请求】。
+//   ⚠️ 但它内部有一个包在 try/catch 里的
+//      import("./__vite-browser-external-2447137e.js")（vite 给 Node 内置模块的桩）
+//      → 每次加载会有一次 404 被吞掉，功能不受影响（见 docs/ssh-tunnel.md §7.1a）。
+//
+// 与 agent 的线协议（docs/ssh-tunnel.md §6.2）：
+//   浏览器 → agent：二进制帧，[type:1][len:4 大端][payload]
+//                     0x00 = 输入   0x01 = {cols,rows}   0x02 = 断开
+//   agent → 浏览器：**裸字节**（终端输出，不封装）
+//   relay → 浏览器：文本帧 JSON（ready / agent_offline / closed / error）
+
+import { init, Terminal, FitAddon } from "__ASSETS__/ghostty-web.js";
+
+const WS_PATH = "__SSH_WS_PATH__";
+
+const FRAME_INPUT = 0x00;
+const FRAME_RESIZE = 0x01;
+const FRAME_CLOSE = 0x02;
+const FRAME_HEADER = 5;
+
+const encoder = new TextEncoder();
+
+/** 编码一帧（与 Go 侧 appendSSHFrame 同构，改格式时两边都要动）。 */
+function frame(type, payload) {
+  const p = payload || new Uint8Array(0);
+  const buf = new Uint8Array(FRAME_HEADER + p.length);
+  buf[0] = type;
+  new DataView(buf.buffer).setUint32(1, p.length);
+  buf.set(p, FRAME_HEADER);
+  return buf;
+}
+
+const statusEl = document.getElementById("status");
+const retryEl = document.getElementById("retry");
+
+function setStatus(msg, kind) {
+  statusEl.textContent = msg || "";
+  statusEl.className = kind || "";
+}
+
+let term = null;
+let fit = null;
+let ws = null;
+let gotAnything = false; // 是否收到过任何数据（用来区分「握手就失败」与「中途断开」）
+
+// 1) 初始化 WASM → 建终端 → 装 FitAddon
+try {
+  await init();
+} catch (e) {
+  setStatus("终端资源加载失败（资源站缺 ghostty-web.js？）", "err");
+  console.error("ghostty-web init 失败", e);
+  throw e;
+}
+
+term = new Terminal({
+  fontSize: 14,
+  cursorBlink: true,
+  scrollback: 5000,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace',
+  theme: { background: "#16161a", foreground: "#e9e9ec" },
+});
+
+fit = new FitAddon();
+term.loadAddon(fit);
+term.open(document.getElementById("term"));
+fit.fit();
+// ⚠️ observeResize 会在容器尺寸变化时自动 fit()；
+//    fit() → Terminal.resize() → onResize → 我们把新尺寸发给 agent。
+fit.observeResize();
+
+// 2) 终端输入 → 二进制帧
+term.onData((data) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(frame(FRAME_INPUT, encoder.encode(data)));
+});
+
+// 3) 终端尺寸变化 → resize 帧（agent 会转成 SSH 的 window-change）
+term.onResize(({ cols, rows }) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(frame(FRAME_RESIZE, encoder.encode(JSON.stringify({ cols, rows }))));
+});
+
+/** 同源 wss 地址：页面留在本域，因此不需要知道网关域名。 */
+function wsUrl() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return proto + "//" + location.host + WS_PATH;
+}
+
+/** 处理 relay 发来的文本控制帧（终端输出永远是二进制帧）。 */
+function handleControl(raw) {
+  let msg = null;
+  try {
+    msg = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  switch (msg && msg.type) {
+    case "ready":
+      setStatus("已连接", "ok");
+      break;
+    case "agent_offline":
+      setStatus("家里 agent 不在线（请确认 xtun -ssh 正在运行）", "warn");
+      retryEl.style.display = "";
+      break;
+    case "closed":
+      setStatus("会话已结束", "");
+      retryEl.style.display = "";
+      break;
+    case "agent_online":
+      setStatus("agent 已上线", "ok");
+      break;
+    case "error":
+      setStatus(msg.message || "出错", "err");
+      retryEl.style.display = "";
+      break;
+    default:
+      break;
+  }
+}
+
+function connect() {
+  retryEl.style.display = "none";
+  gotAnything = false;
+  setStatus("连接中…");
+
+  ws = new WebSocket(wsUrl());
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => {
+    term.focus();
+    // ⚠️ 立刻把当前尺寸发过去：agent 建立会话时要先问用户名（会等人输入），
+    //    所以这一帧几乎一定赶在 RequestPty 之前到达 —— 初始 PTY 尺寸才正确。
+    //    不发的话每次都是默认 80x24，全屏程序（vim/htop）会画错。
+    if (fit) {
+      const d = fit.proposeDimensions && fit.proposeDimensions();
+      if (d && d.cols && d.rows) {
+        ws.send(frame(FRAME_RESIZE, encoder.encode(JSON.stringify({ cols: d.cols, rows: d.rows }))));
+      }
+    }
+  };
+
+  ws.onmessage = (e) => {
+    gotAnything = true;
+    // 文本帧 = 控制消息；二进制帧 = 终端输出
+    if (typeof e.data === "string") {
+      handleControl(e.data);
+      return;
+    }
+    term.write(new Uint8Array(e.data));
+  };
+
+  ws.onclose = () => {
+    if (!gotAnything) {
+      // 一个字节都没收到就断了：多半是登录态过期（/ws 无 cookie 返回 401，
+      // WS 握手不跟随重定向，所以前端只会看到「莫名其妙地失败」）。
+      setStatus("连接失败 —— 登录可能已过期，请重新登录", "err");
+      term.write("\r\n\x1b[33m连接失败：登录态可能已过期。请刷新并重新登录（/login）。\x1b[0m\r\n");
+    } else {
+      setStatus("连接已断开", "warn");
+    }
+    retryEl.style.display = "";
+  };
+
+  ws.onerror = () => {
+    // 详细原因在 onclose 里统一提示（onerror 拿不到状态码）
+  };
+}
+
+retryEl.addEventListener("click", () => {
+  if (ws) {
+    try { ws.close(); } catch { /* 已关闭 */ }
+    ws = null;
+  }
+  term.reset();
+  connect();
+});
+
+// 关页面时通知 agent 断开，避免留下半开的 SSH 会话
+window.addEventListener("beforeunload", () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try { ws.send(frame(FRAME_CLOSE)); } catch { /* 忽略 */ }
+  }
+});
+
+connect();
+</script>
+</body>
+</html>

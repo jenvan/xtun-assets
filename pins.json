@@ -1,5 +1,5 @@
 {
-  "version": 16,
+  "version": 17,
   "assets_origin": "https://assets.xtun.dev",
   "pins": {
     "/": {
@@ -24,6 +24,15 @@
     "/iron-remote-desktop-rdp.js": {
       "sha256": "b008f0e258fd9485c6f2b07747116d4fcbbe51053ce995abd048fb2b79636332",
       "sri": "sha384-xl0mfGthwHkF1/UH1aqpznkAKL0HqcF6g3efR2H2lZ0RqIDyH2sT9ewZMgxlmxuy"
+    },
+    "/ssh.html": {
+      "sha256": "49ac63695818823b1c2f78ab369a03b8cc58bc6d995f9a5646763f73983a8fb7",
+      "sha256Norm": "b7b6f1b6b91da693fe317a65fb734d20a47711fcce500638970c63db12548585",
+      "sri": "sha384-S+G4ugnAPxU7+QE+suF7HG19yFCFqx/82Q/pquItKsj7MslfOML1PNVRW6f98KnR"
+    },
+    "/ghostty-web.js": {
+      "sha256": "078b3fe37e4ef469d3f3d7772ee263070f8613e5a6f5ff305c85778907f45e72",
+      "sri": "sha384-d8OPGO8aw++xkE2HTuTFZ22Fjy63MXiTWzZ6einB5358A9V/gb0AUhiUkoJ0QmYf"
     }
   }
 }
