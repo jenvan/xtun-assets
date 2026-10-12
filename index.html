@@ -77,25 +77,41 @@
     所以这里不再有 fixed 按钮，整页也**没有任何 .btn 样式**了。
   */
   /*
-    ⚠️ 顶栏在 .hero【里面】（见 HTML）—— 这样 .hero 的背景光/网格自然覆盖品牌行，
-       不会出现「顶部的背景只显示了前半截」（用户 2026-10-12 报的：背景原来挂在
-       首屏上，而品牌行在它外面，于是最顶上那一块完全没有背景）。
-    slogan 也从第 1 页搬到这里（用户要求「放在 logo 后面，或者靠右位置」）：
-    .row 是 flex + space-between —— 品牌靠左、slogan 靠右。
+    顶栏：**置顶浮层（position:sticky）** —— 用户 2026-10-12 说「logo 和 slogan 跟下面
+    很不协调」，建议「搞成页面浮动 fixed 的，背景稍微深一点或者加下边框」。
+    · 用 sticky 而不是 fixed：sticky 仍在文档流里，**不用补一块等高占位**，
+      也不会在手机上永久吃掉一条屏幕；滚到哪它都在，首屏也不会因此下移。
+    · ⚠️ 它必须放在 .hero【外面】：sticky 只在自己父框内生效，塞进 .hero 里一滚出
+      hero 就失效。代价是首屏的光晕不再铺到品牌行后面 —— 但这一版顶栏**自己有一条
+      更深的底色 + 下边框**，本来就是「页头」而不是「首屏的一部分」，
+      那条分界线是刻意的（正是用户要的「协调」）。
+    · 底色比页面底色更深 + 毛玻璃：滚动时内容从下面穿过是磨砂感，不是硬切。
+    · slogan 在右侧（用户要求「放在 logo 后面，或者靠右位置」）。
   */
-  .topbar{padding:clamp(18px,3.4vh,30px) 0 clamp(16px,2.4vh,26px)}
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    padding:clamp(11px,1.7vh,15px) 0;
+    background:rgba(17,17,21,.86);
+    border-bottom:1px solid var(--line);
+    backdrop-filter:saturate(1.4) blur(12px);
+    -webkit-backdrop-filter:saturate(1.4) blur(12px);
+  }
   .topbar .row{display:flex; align-items:center; justify-content:space-between; gap:14px}
   .brand{display:flex; align-items:center; gap:clamp(8px,1vw,11px)}
-  .brand svg{width:clamp(28px,2.6vw,34px); height:auto; flex:none}
-  .brand .wordmark{font-size:19px; font-weight:700; letter-spacing:-.02em}
+  .brand svg{width:clamp(24px,2.2vw,28px); height:auto; flex:none}
+  .brand .wordmark{font-size:18px; font-weight:700; letter-spacing:-.02em}
   .brand .wordmark .dot{color:var(--accent)}
   .slogan{margin:0; color:var(--dim); font-size:13.5px; letter-spacing:.01em; white-space:nowrap}
   @media (max-width:430px){ .slogan{font-size:12.5px} }
 
   /* ---------- 首屏 banner：两页幻灯片 ---------- */
+  /*
+    首屏：只放幻灯片（顶栏已经独立出去当页头了）。
+    ⚠️ overflow:hidden 是拿来裁光晕溢出的（尤其左右），别删 —— 删了会出现横向滚动条。
+  */
   .hero{
     position:relative; overflow:hidden;
-    padding:clamp(26px,4.5vh,52px) 0 clamp(28px,5vh,56px);
+    padding:clamp(30px,5.5vh,60px) 0 clamp(30px,5vh,58px);
   }
   /* 背景光：两块径向渐变 + 一层极淡的网格。全部 CSS，无外部图片 */
   .hero::before{
@@ -221,13 +237,35 @@
   }
 
   /* ---------- 通用小节 ---------- */
-  section{padding:clamp(40px,7vh,76px) 0}
+  /* scroll-margin-top：锚点跳转时给置顶浮层让出高度，否则标题会被压在页头下面 */
+  section{padding:clamp(40px,7vh,76px) 0; scroll-margin-top:70px}
   .kicker{
     display:block; margin:0 0 10px; font-size:12.5px; font-weight:700;
     letter-spacing:.14em; color:var(--accent-soft); text-transform:uppercase;
   }
   h2{font-size:clamp(21px,2.4vw,29px); line-height:1.3; margin:0 0 12px; letter-spacing:-.015em}
-  .sub{margin:0 0 30px; max-width:64ch; color:var(--dim); font-size:15px}
+  /*
+    ⚠️ max-width 用 90ch：这是几条小节导语里**最长**的一句量出来的宽度 ——
+       「打开控制台，你的设备会列在一张清单里 —— 点一下就连上。不用记地址，也不用装客户端。」
+       41 个字（真机量：15px 字体下一行 **619px**）。
+       原来写 64ch，而 **`ch` 是字体里 "0" 的宽度**（本页 ≈9.45px）：
+       64ch≈605px < 619px → 断点正好落在最后两个字之间、第二行只剩一个「端。」
+       （用户 2026-10-12 报的：「从 客户 和 端 中间直接换行了」）。
+       90ch≈850px 留足余量；容器本来就有 1200px 上限，长段落照样按可读宽度折行。
+    ⚠️ 但它只是「通常够宽」——**不同平台字体宽度不同**，不能靠它保证不断行，
+       所以最长的那一句额外用 .nb（见下）钉成不可拆。
+  */
+  .sub{margin:0 0 30px; max-width:min(90ch,100%); color:var(--dim); font-size:15px}
+  /*
+    ⚠️ 中文默认**逐字可断**，浏览器想在哪断就在哪断 —— 于是会出现「客户 / 端」这种
+       把一个词劈开、第二行只剩两个字的情况（用户报的就是这个）。
+       CSS 没有「中文按词断行」的通用开关（`word-break:keep-all` 会把整段 CJK 变成
+       一个不可断的长条，窄屏直接溢出），所以只给**最关键的那一句**加 nowrap：
+       放得下就留在本行，放不下就**整句挪到下一行**，绝不会劈开一个词。
+       ⚠️ 只对短句用 —— 长段落加它必然溢出错行。
+       （真机验证：700px 宽仍是一行；640px 及以下正好折成两行，断点在小句之间。）
+  */
+  .sub .nb{white-space:nowrap}
   .divider{height:1px; background:linear-gradient(90deg,transparent,var(--line) 18%,var(--line) 82%,transparent)}
 
   /* ---------- 功能卡 ---------- */
@@ -393,10 +431,7 @@
 </svg>
 
 
-<!-- ============================ 首屏 banner（两页幻灯片） ============================ -->
-<div class="hero">
-  <div class="wrap">
-<!-- ============================ 顶部品牌行 ============================ -->
+<!-- ============================ 顶部品牌行（置顶浮层，在 .hero 外面） ============================ -->
 <header class="topbar">
   <div class="wrap">
     <!--
@@ -428,6 +463,10 @@
     </div>
   </div>
 </header>
+
+<!-- ============================ 首屏 banner（两页幻灯片） ============================ -->
+<div class="hero">
+  <div class="wrap">
     <div class="deck">
       <!--
         ⚠️ 幻灯片的「状态」就是这两个 radio：下面每页的显隐、圆点的亮暗全靠 :checked。
@@ -661,7 +700,7 @@
   <div class="wrap">
     <span class="kicker">能做什么</span>
     <h2>四件事，一个入口</h2>
-    <p class="sub">打开控制台，你的设备会列在一张清单里 —— 点一下就连上。不用记地址，也不用装客户端。</p>
+    <p class="sub">打开控制台，你的设备会列在一张清单里 —— 点一下就连上。<span class="nb">不用记地址，也不用装客户端。</span></p>
 
     <!--
       ⚠️ 卡片顺序（用户 2026-10-12 要求「远程桌面和 ssh 挨在一起讲比较好」）：
@@ -809,8 +848,7 @@
   <div class="wrap">
     <div class="row">
       <span>xtun</span><span class="sep">·</span>
-      <span>内网外网，一键打通</span><span class="sep">·</span>
-      <span>小提示：双击页面任意处也能登录</span>
+      <span>内网外网，一键打通</span>
     </div>
   </div>
 </footer>
