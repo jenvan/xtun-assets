@@ -15,9 +15,12 @@
           （它就是「双击页面 / 长按屏幕 → 去登录」）。所以本页**一行 JS 都没有**：
           动效全部用 CSS 做，纯静态、无脚本。
     ⚠️ 2. **链接只能用绝对 URL（https: 开头）或 `#` 锚点**。Worker 返回前会跑
-          rewriteAssetPaths：它改写相对引用，并注入 <base href="<资源站>/"> ——
+          rewriteAssetPaths：它改写相对引用，并注入一个指向资源站的 base 标签 ——
           于是 `href="/login"` 这种**根相对路径会解析到资源站域名**（那里没有 /login，
           GH Pages 404）。这正是 2026-09-27 那次「双击没反应」的成因。
+          ⚠️ 这里**故意不写出那个标签的字面样子**：rewriteAssetPaths 的属性正则会
+          连注释里的 `href="…"` 一起改写（注释是惰性的、不影响渲染，但 view-source
+          会看到一个「指向资源站的 <资源站>」的怪东西）。写说明时用文字描述即可。
           `scripts/check-homepage.mjs` 会在 CI 里静态拦住这两种写法。
     ⚠️ 3. **`</body>` 不能删**：注入脚本挂在它前面（没有它就只能追加到文件末尾）。
 
@@ -475,7 +478,7 @@
         <div><h3>不用公网 IP，不用动路由器</h3><p>是被访问的机器主动连出去的，所以没有端口映射、没有固定 IP 也照样能用。</p></div></div>
 
       <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
-        <div><h3>端到端加密，不做中间人</h3><p>隧道里只搬字节，不会把你的内容解开再重打包；去 HTTPS 网站时，证书校验仍然发生在你和目标网站之间。</p></div></div>
+        <div><h3>不碰你的内容，不做中间人</h3><p>隧道里只搬字节，不会把你的内容解开再重打包；访问 HTTPS 网站时，证书校验仍然发生在你和目标网站之间（TLS 端到端）。</p></div></div>
 
       <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
         <div><h3>动态码 + 签名登录态</h3><p>登录要手机上的动态码，连续输错会被限速；一旦换了动态码密钥，所有已登录的设备立刻失效。</p></div></div>
