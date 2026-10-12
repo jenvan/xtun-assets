@@ -35,7 +35,11 @@
        连源码注释里也不写，view-source 同样是公开的（`check:homepage` 会拦住）；
      · ⚠️ 「内网 / 外网」是**故意留的双关**（局域网↔公网 / 墙内↔墙外），
        意会即可 —— **不要加限定去澄清**，也不要明说；
-     · extras/ 里的工具**不在本页介绍范围**（它们是可选独立工具）。
+     · extras/ 里的工具**不在本页介绍范围**（它们是可选独立工具）；
+     · ⚠️ **页面上的「进入控制台」按钮只允许有一个**（用户 2026-10-12 要求：
+       「不要放太多的进入控制台的按钮，保留右上角那个就好」）—— 就是右上角那个
+       `.enter`。它在桌面是 fixed、小屏落进首屏文案流（详见 CSS 注释），
+       `check:homepage` 会断言【恰好一个】。要加别的引导就用锚点（如「看看能做什么」）。
 -->
 
 <!--
@@ -78,14 +82,17 @@
   .enter:hover{background:#6d8bfb}
   .enter:focus-visible,.btn:focus-visible,a:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
   /*
-    小屏：**让右上角这个退场**。原因有两条：
-      · 它 fixed 着会在滚动时盖住卡片（旧版就是因为这个改成 static 的）；
-      · 而首屏里已经有一个一模一样的「进入控制台」主按钮 —— 小屏再摆一个纯属重复，
-        且它是 <body> 的第一个元素，改成 static 后会出现在徽标【上面】，很怪。
-    ⚠️ 所以小屏的登录入口 = 首屏那个主 CTA（页面底部还有一条「先进控制台看看」）。
-       改这页时别把小屏的入口全删了 —— 手势（双击/长按）不能当唯一入口。
+    小屏：改成 static，落进首屏文案流里（DOM 位置见下面 hero 里那个 <a>）。
+    ⚠️ 为什么不能继续 fixed：滚动时会盖住卡片。
+    ⚠️ 为什么不能 display:none：它是**页面上唯一的「进入控制台」按钮**
+       （用户 2026-10-12 要求「只保留右上角那个」）—— 手势（双击 / 长按）没人会猜到，
+       不能当唯一入口。
+    ⚠️ DOM 位置必须放在首屏文案里：它是 <body> 的第一个元素时，改成 static 会跑到
+       徽标【上面】去（改版时踩过）。
   */
-  @media (max-width:640px){ .enter{display:none} }
+  @media (max-width:640px){
+    .enter{position:static; width:100%; justify-content:center; margin:0 0 16px}
+  }
 
   /* ---------- 首屏 ---------- */
   .hero{
@@ -117,6 +124,15 @@
     background:rgba(91,124,250,.12); border:1px solid rgba(91,124,250,.32);
   }
   .badge .pip{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(134,239,172,.16)}
+  /*
+    品牌行：会合点标志 + 小写字标。
+    ⚠️ 字标**不是** <h1> —— 语义上的主标题是下面那句价值主张（h1），
+       品牌在这里只是「谁做的」。（旧版把 xtun. 当 h1，是因为那时整页只有一个标题。）
+  */
+  .brand{display:flex; align-items:center; gap:clamp(8px,1vw,11px); margin:0 0 16px}
+  .brand svg{width:clamp(28px,2.6vw,34px); height:auto; flex:none}
+  .brand .wordmark{font-size:19px; font-weight:700; letter-spacing:-.02em}
+  .brand .wordmark .dot{color:var(--accent)}
   h1{
     margin:0 0 14px; font-size:clamp(30px,4.6vw,50px); line-height:1.16;
     font-weight:750; letter-spacing:-.022em;
@@ -273,15 +289,36 @@
   </defs>
 </svg>
 
-<!-- 右上角入口：桌面钉在右上角；小屏隐藏（首屏已有同款主 CTA，见 CSS 注释） -->
-<a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
-
 <!-- ============================ 首屏 ============================ -->
 <div class="hero">
   <div class="wrap">
     <div class="hero-grid">
       <div>
         <p class="badge"><span class="pip"></span>不用公网 IP · 不用端口映射 · 不装 App</p>
+        <!--
+          标志：一个「会合点」—— 四条连线（构成字母 x）各连一台机器，
+          它们在中心那个亮点会合。这正是 xtun 在做的事：把两边连起来。
+          ⚠️ 内联 SVG：本页会被 Worker 取回并重写资源路径，内联就没有任何路径问题。
+          ⚠️ 它的配色用 CSS 变量，跟页面同一套（改主题时自动跟着走）。
+        -->
+        <div class="brand">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <g stroke="var(--accent)" stroke-width="5.5" stroke-linecap="round" opacity=".6">
+              <line x1="17" y1="17" x2="47" y2="47"/>
+              <line x1="47" y1="17" x2="17" y2="47"/>
+            </g>
+            <g fill="var(--accent-soft)">
+              <circle cx="17" cy="17" r="7"/>
+              <circle cx="47" cy="17" r="7"/>
+              <circle cx="17" cy="47" r="7"/>
+              <circle cx="47" cy="47" r="7"/>
+            </g>
+            <!-- 会合点：白点 + 一圈细描边（不用大面积光晕，小尺寸下会糊成脏圈） -->
+            <circle cx="32" cy="32" r="10.5" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".75"/>
+            <circle cx="32" cy="32" r="5.5" fill="#fff"/>
+          </svg>
+          <span class="wordmark">xtun<span class="dot">.</span></span>
+        </div>
         <h1>出门在外，<br>也能回到<span class="grad">自己的电脑</span></h1>
         <!--
           ⚠️ 「内网 / 外网」是故意留的双关，别去澄清（见文件头的口径说明）。
@@ -292,8 +329,14 @@
           之后无论你在公司、在咖啡厅还是在手机上，打开浏览器就能用上它 ——
           远程桌面、内网网站、命令行终端，都在这一个页面里。
         </p>
+        <!--
+          ⚠️ 这里**只有一个**「进入控制台」按钮，就是右上角那个 `.enter`（用户要求：
+             别在页面上摆太多同一个入口）。它 DOM 上放在这里，是为了小屏改成 static 时
+             落在文案流里、而不是跑到徽标上面去。
+          下面这个是「往下看」的次要动作，不是登录入口。
+        -->
+        <a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
         <div class="cta">
-          <a class="btn btn-primary" href="https://xtun.dev/login">进入控制台 →</a>
           <a class="btn btn-ghost" href="#what">看看能做什么</a>
         </div>
       </div>
@@ -513,7 +556,6 @@
         <p>家里和公司都在同一座城市、又有一台双方都够得着的服务器时，让它来会合往往更快更稳。
            程序与用法都不变，只改一个地址。</p>
       </div>
-      <a class="btn btn-ghost" href="https://xtun.dev/login">先进控制台看看 →</a>
     </div>
   </div>
 </section>
@@ -523,7 +565,7 @@
     <div class="row">
       <span>xtun</span><span class="sep">·</span>
       <span>内网外网，一键打通</span><span class="sep">·</span>
-      <span>双击页面任意处也可以进入控制台</span>
+      <span>小提示：双击页面任意处也能登录</span>
     </div>
   </div>
 </footer>
