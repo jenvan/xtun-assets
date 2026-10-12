@@ -4,210 +4,526 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>xtun —— 代理上网与远程访问</title>
+<meta name="description" content="xtun —— 不用公网 IP、不用端口映射、不装 App：在外面用浏览器打开家里的电脑、内网网站和终端，也能让机器借你的线路出网。">
+<title>xtun —— 出门在外，也能回到自己的电脑</title>
 <!--
   本文件是资源站的首页（https://assets.xtun.dev/），也是**网关未登录首页的基底**：
   网关会把它取回、注入「双击 / 长按 → 登录」的脚本再返回（见 x-edge.js 的
-  injectLoginGesture）。因此两条约束：
-    ⚠️ 不要在 document 上再占用 dblclick —— 那个手势已被注入的脚本用掉了。
-    ⚠️ 只用绝对 URL（https: 开头）或 # 锚点做链接：Worker 返回前会跑
-       rewriteAssetPaths，一方面把相对引用改写成资源站地址、另一方面注入
-       <base href="<资源站>/">，相对路径会因此跑到资源站域名上去。
-  唯一源：cloudflare-proxy 仓库的 pages-assets/index.html（本文件由 CI 同步过来）。
+  injectLoginGesture）。因此三条硬约束（改本页前务必读完）：
 
-  📐 版式约束：**1600×900 的显示器要一屏放下，不出现滚动条**（用户要求）。
-     所以：顶部留白压到 ~36px、四张功能卡在宽屏上排成【一行四张】、高度都收紧。
-     改文案/加卡片时请顺手在 1600×900 下量一次 scrollHeight（见 CHANGELOG 里的做法）。
+    ⚠️ 1. **不要自己监听 dblclick / touchstart 等手势** —— 那些已被注入的脚本用掉了
+          （它就是「双击页面 / 长按屏幕 → 去登录」）。所以本页**一行 JS 都没有**：
+          动效全部用 CSS 做，纯静态、无脚本。
+    ⚠️ 2. **链接只能用绝对 URL（https: 开头）或 `#` 锚点**。Worker 返回前会跑
+          rewriteAssetPaths：它改写相对引用，并注入 <base href="<资源站>/"> ——
+          于是 `href="/login"` 这种**根相对路径会解析到资源站域名**（那里没有 /login，
+          GH Pages 404）。这正是 2026-09-27 那次「双击没反应」的成因。
+          `scripts/check-homepage.mjs` 会在 CI 里静态拦住这两种写法。
+    ⚠️ 3. **`</body>` 不能删**：注入脚本挂在它前面（没有它就只能追加到文件末尾）。
 
-  📝 文案面向【懂 IT 的人】：SOCKS5 / VNC / RDP / RDCleanPath / WebSocket /
-     端口映射 这些词直接用，不用解释；讲清「能干什么、和别的方案比强在哪」。
+  📐 版式：**首屏（hero）在 1600×900 内不出现滚动条**，整页是一张可以往下滚的产品介绍页
+     （2026-10-11 改版：用户要求做成「现代大气的产品介绍页」，原来的「整页一屏装完」
+     约束只对首屏继续成立）。
+
+  📝 文案面向【使用者】（非开发者），2026-10-11 改版时定的口径：
+     · 先说「能帮你做什么」，协议名（VNC / RDP / SSH / HTTP / SOCKS5）只作小字标签；
+     · ❌ 不出现那两个被明确排除的说法（用户 2026-09 定的口径，见 CHANGELOG）；
+       SOCKS5 那条只用「换个出口 / 统一出口 / 按需切换线路」这类中性说法 ——
+       连源码注释里也不写，view-source 同样是公开的（`check:homepage` 会拦住）；
+     · ⚠️ 「内网 / 外网」是**故意留的双关**（局域网↔公网 / 墙内↔墙外），
+       意会即可 —— **不要加限定去澄清**，也不要明说；
+     · extras/ 里的工具**不在本页介绍范围**（它们是可选独立工具）。
+-->
+
+<!--
+  配色与登录页 / 列表页逐字对齐（xrelay 的 pages.go、x-edge.js 的 GW_PAGE_STYLE）：
+  同一套深色底 + 蓝色强调，从「首页 → 登录 → 列表 → 连接」是一条视觉连续的路。
 -->
 <style>
   *{box-sizing:border-box}
   :root{
-    --bg:#16161a; --card:#1e1e24; --line:#2e2e37;
-    --fg:#e9e9ec; --dim:#9a9aa5; --accent:#5b7cfa; --accent-soft:#93a8ff;
+    --bg:#16161a; --bg-soft:#1a1a20; --card:#1e1e24; --line:#2e2e37;
+    --fg:#e9e9ec; --dim:#9a9aa5; --dim2:#7c7c8a;
+    --accent:#5b7cfa; --accent-soft:#93a8ff; --accent-deep:#3b55c4;
+    --ok:#86efac;
     /* 右上角按钮距【右边】与【上边】的距离：同一个值 → 天然等距 */
     --edge:clamp(12px,2vw,20px);
+    --wrap:1200px;
   }
+  html{scroll-behavior:smooth}
   html,body{margin:0}
   body{
-    min-height:100vh; display:flex; flex-direction:column; color:var(--fg);
-    background:radial-gradient(1100px 520px at 50% -14%, #242438 0%, var(--bg) 58%) no-repeat, var(--bg);
-    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    color:var(--fg); background:var(--bg);
+    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     -webkit-font-smoothing:antialiased;
+    overflow-x:hidden; /* 装饰性光斑可能溢出，别让它带出横向滚动条 */
   }
-  /* 「进入控制台」：fixed 钉在右上角，距右边与上边等距（滚动也不动） */
+  b,strong{color:var(--fg); font-weight:650}
+  a{color:var(--accent-soft)}
+
+  .wrap{width:100%; max-width:var(--wrap); margin:0 auto; padding:0 clamp(16px,2.4vw,28px)}
+
+  /* ---------- 右上角「进入控制台」 ---------- */
+  /* 桌面：fixed 钉在右上角，不占版面；滚动时一直在 —— 随时能进去 */
   .enter{
-    position:fixed; top:var(--edge); right:var(--edge); z-index:10;
+    position:fixed; top:var(--edge); right:var(--edge); z-index:50;
     display:inline-flex; align-items:center; gap:8px;
-    padding:9px 15px; border-radius:11px; font-size:13.5px; font-weight:600;
+    padding:10px 16px; border-radius:12px; font-size:14px; font-weight:650;
     color:#fff; background:var(--accent); text-decoration:none;
-    box-shadow:0 8px 24px -10px rgba(91,124,250,.9);
+    box-shadow:0 10px 28px -12px rgba(91,124,250,.95);
   }
   .enter:hover{background:#6d8bfb}
-  .enter:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
-  /* 小屏：不再悬浮（否则滚动时会盖住卡片），改成总结下面的一块 —— 仍然显眼、可点 */
-  @media (max-width:640px){
-    .enter{position:static; margin-top:16px}
+  .enter:focus-visible,.btn:focus-visible,a:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
+  /*
+    小屏：**让右上角这个退场**。原因有两条：
+      · 它 fixed 着会在滚动时盖住卡片（旧版就是因为这个改成 static 的）；
+      · 而首屏里已经有一个一模一样的「进入控制台」主按钮 —— 小屏再摆一个纯属重复，
+        且它是 <body> 的第一个元素，改成 static 后会出现在徽标【上面】，很怪。
+    ⚠️ 所以小屏的登录入口 = 首屏那个主 CTA（页面底部还有一条「先进控制台看看」）。
+       改这页时别把小屏的入口全删了 —— 手势（双击/长按）不能当唯一入口。
+  */
+  @media (max-width:640px){ .enter{display:none} }
+
+  /* ---------- 首屏 ---------- */
+  .hero{
+    position:relative; overflow:hidden;
+    padding:clamp(56px,9vh,104px) 0 clamp(28px,5vh,56px);
   }
-  /* 容器尽量宽 + 【顶对齐】：内容靠上排（用户要求「整体往上来一点」），
-     不垂直居中 —— 居中会同时把顶部推开、底部留一大块，反而显得上面的总结离卡片太远或太近。
-     ⚠️ 顶部内边距不能太小：右上角那个 fixed 按钮就钉在 top:--edge 上。 */
-  /* ⚠️ 纵向留白一律用 vh 算：1600×900 这种高屏要把一屏用满（别缩在顶上留一大片空白），
-     矮屏又得自动收紧到不出现滚动条 —— vh 一次满足两头，比写死 px 稳。 */
-  .wrap{width:100%; max-width:1240px; margin:0 auto; padding:7.5vh clamp(16px,2vw,28px) 4vh}
-  header{text-align:center; margin-bottom:6.2vh}
-  /* 顶部标志：左边图形 + 右边 xtun，居中成一组 */
-  .logo{display:flex; align-items:center; justify-content:center; gap:clamp(7px,1vw,11px); margin-bottom:8px}
-  .logo svg{width:clamp(32px,3.4vw,42px); height:auto; flex:none}
-  h1{font-size:clamp(26px,3vw,34px); font-weight:700; letter-spacing:-.02em; margin:0}
-  h1 .dot{color:var(--accent)}
-  .tagline{margin:0 0 1.6vh; color:var(--fg); font-size:clamp(15px,1.5vw,17px); font-weight:600}
-  .lead{margin:0 auto; max-width:1000px; color:var(--dim); font-size:14px; line-height:1.7; text-align:left}
-  .lead b{color:var(--fg); font-weight:600}
-  .lead .k{color:var(--accent-soft)}
-  /*
-    功能卡栅格：**固定列数**而不是 auto-fit —— auto-fit 在 1000~1300px 这种
-    中间宽度会落成「3+1」，最后一行孤零零一张很难看。
-      窄屏 1 列 → ≥640px 2 列（2×2）—— 再宽也不加列（见下面那段的实测理由）
-    「自建中继」是部署方式（不是第 5 个功能），用 .wide 通栏另起一行。
-  */
-  .grid{display:grid; gap:1.9vh; grid-template-columns:1fr}
-  @media (min-width:640px){ .grid{grid-template-columns:1fr 1fr} }
-  /*
-    ⚠️ 不做「超宽屏一行四张」：实测 1920×1080 下那样内容只占 66%（卡片挤在一行、页面很空），
-    而两列 + 1240 容器能填到 ~80%，卡片宽度也更好读。宽屏两侧留白是正常的。
-  */
-  .card{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:2.3vh clamp(15px,1.5vw,22px) 2vh}
-  .card h2{margin:0 0 4px; font-size:15px}
-  /* 卡片标题下的一行「它解决什么」 */
-  .card .use{margin:0 0 9px; color:var(--accent-soft); font-size:12.5px}
-  .card p.body{margin:0; color:var(--dim); font-size:13.5px; line-height:1.7}
-  .card.wide{grid-column:1/-1}
-  .k{color:var(--accent-soft); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px}
-  /*
-    矮屏（≤760px）才切紧凑：1366×768 笔记本去掉工具栏后视口约 650px，
-    上面那套字号在那个高度装不下 2×2 卡片（实测溢出 113%）。只压间距与字号，不动结构。
-    ⚠️ 阈值卡在 760 而不是 820：1600×900 的真实视口（~790）**必须走宽松版式**，
-       否则会像上一版那样，明明屏幕不小、却只填 82%（越调越挤）。
-  */
-  @media (max-height:760px){
-    .wrap{padding-top:3.4vh; padding-bottom:2.2vh}
-    header{margin-bottom:3vh}
-    .grid{gap:1.2vh}
-    .card{padding:1.5vh 14px 1.3vh}
-    .card h2{font-size:14px}
-    .card .use{margin:0 0 6px; font-size:12px}
-    .card p.body{font-size:12.5px; line-height:1.6}
-    .tagline{margin:0 0 1.2vh; font-size:15px}
-    .lead{font-size:13px; line-height:1.62}
-    .logo svg{width:32px}
-    h1{font-size:26px}
+  /* 背景光：两块径向渐变 + 一层极淡的网格。全部 CSS，无外部图片 */
+  .hero::before{
+    content:""; position:absolute; inset:-40% -10% auto -10%; height:120%; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(760px 380px at 22% 8%,  rgba(91,124,250,.30), transparent 62%),
+      radial-gradient(680px 340px at 84% 0%,  rgba(147,168,255,.18), transparent 60%);
   }
+  .hero::after{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:44px 44px;
+    mask-image:radial-gradient(70% 60% at 50% 0%,#000 0%,transparent 78%);
+    -webkit-mask-image:radial-gradient(70% 60% at 50% 0%,#000 0%,transparent 78%);
+  }
+  .hero .wrap{position:relative; z-index:1}
+  .hero-grid{display:grid; gap:clamp(24px,4vw,48px); align-items:center}
+  @media (min-width:940px){ .hero-grid{grid-template-columns:1.02fr .98fr} }
+
+  .badge{
+    display:inline-flex; align-items:center; gap:9px; margin:0 0 18px;
+    padding:6px 13px; border-radius:999px; font-size:13px; color:var(--accent-soft);
+    background:rgba(91,124,250,.12); border:1px solid rgba(91,124,250,.32);
+  }
+  .badge .pip{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(134,239,172,.16)}
+  h1{
+    margin:0 0 14px; font-size:clamp(30px,4.6vw,50px); line-height:1.16;
+    font-weight:750; letter-spacing:-.022em;
+  }
+  /* 关键词做成渐变字：整页只有这一处，避免花 */
+  h1 .grad{
+    background:linear-gradient(96deg,var(--accent-soft),#c9b6ff 55%,var(--accent-soft));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .tagline{margin:0 0 12px; font-size:clamp(17px,1.7vw,20px); font-weight:650}
+  .tagline .dot{color:var(--accent)}
+  .lead{margin:0 0 26px; max-width:56ch; color:var(--dim); font-size:clamp(14.5px,1.15vw,16px)}
+  .lead b{color:var(--fg)}
+
+  .cta{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+  .btn{
+    display:inline-flex; align-items:center; gap:9px; text-decoration:none;
+    padding:12px 20px; border-radius:12px; font-size:15px; font-weight:650;
+  }
+  .btn-primary{color:#fff; background:var(--accent); box-shadow:0 12px 30px -14px rgba(91,124,250,1)}
+  .btn-primary:hover{background:#6d8bfb}
+  .btn-ghost{color:var(--fg); background:rgba(255,255,255,.04); border:1px solid var(--line)}
+  .btn-ghost:hover{border-color:#454555; background:rgba(255,255,255,.07)}
+
+  .hero-art{width:100%; height:auto; display:block; filter:drop-shadow(0 26px 60px rgba(0,0,0,.45))}
+  /* 数据流：虚线在跑（纯 CSS）；reduced-motion 会把它停掉 */
+  .flow{stroke-dasharray:7 9; animation:flow 1.6s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-32}}
+  .pulse{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.24;transform:scale(1)}50%{opacity:.55;transform:scale(1.12)}}
+  .halo{transform-box:fill-box; transform-origin:center}
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .flow,.pulse{animation:none}
+  }
+
+  /* ---------- 通用小节 ---------- */
+  section{padding:clamp(40px,7vh,76px) 0}
+  .kicker{
+    display:block; margin:0 0 10px; font-size:12.5px; font-weight:700;
+    letter-spacing:.14em; color:var(--accent-soft); text-transform:uppercase;
+  }
+  h2{font-size:clamp(21px,2.4vw,29px); line-height:1.3; margin:0 0 12px; letter-spacing:-.015em}
+  .sub{margin:0 0 30px; max-width:64ch; color:var(--dim); font-size:15px}
+  .divider{height:1px; background:linear-gradient(90deg,transparent,var(--line) 18%,var(--line) 82%,transparent)}
+
+  /* ---------- 功能卡 ---------- */
+  .cards{display:grid; gap:18px; grid-template-columns:1fr}
+  @media (min-width:700px){ .cards{grid-template-columns:1fr 1fr} }
+  @media (min-width:1080px){ .cards{grid-template-columns:repeat(4,1fr)} }
+  .card{
+    position:relative; padding:22px 20px 20px; border-radius:16px;
+    background:linear-gradient(180deg,var(--card),#1b1b21); border:1px solid var(--line);
+    transition:border-color .18s,transform .18s;
+  }
+  @media (hover:hover){ .card:hover{border-color:#3d3d4b; transform:translateY(-2px)} }
+  .ico{
+    width:40px;height:40px;border-radius:11px; display:grid; place-items:center; margin:0 0 14px;
+    background:rgba(91,124,250,.13); border:1px solid rgba(91,124,250,.3); color:var(--accent-soft);
+  }
+  .ico svg{width:21px;height:21px}
+  .card h3{margin:0 0 6px; font-size:16.5px; font-weight:650; letter-spacing:-.01em}
+  .card .when{margin:0 0 10px; font-size:13px; color:var(--accent-soft)}
+  .card p{margin:0; color:var(--dim); font-size:14px; line-height:1.72}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 0}
+  .chip{
+    font-size:11.5px; color:var(--dim2); padding:2px 8px; border-radius:6px;
+    background:rgba(255,255,255,.04); border:1px solid var(--line);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+
+  /* ---------- 三步上手 ---------- */
+  .steps{display:grid; gap:18px; grid-template-columns:1fr}
+  @media (min-width:820px){ .steps{grid-template-columns:repeat(3,1fr)} }
+  .step{
+    position:relative; padding:22px 20px 20px; border-radius:16px;
+    background:var(--bg-soft); border:1px solid var(--line);
+  }
+  .step .n{
+    display:grid; place-items:center; width:30px;height:30px; margin:0 0 13px;
+    border-radius:50%; font-size:14px; font-weight:700; color:#fff;
+    background:linear-gradient(160deg,var(--accent),var(--accent-deep));
+  }
+  .step h3{margin:0 0 7px; font-size:16px}
+  .step p{margin:0; color:var(--dim); font-size:14px}
+  pre{
+    margin:16px 0 0; padding:13px 15px; border-radius:11px; overflow-x:auto;
+    background:#131318; border:1px solid var(--line); color:#d8d8e2;
+    font:12.5px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  pre .c{color:var(--dim2)}
+  pre .k{color:var(--accent-soft)}
+
+  /* ---------- 特性（为什么放心） ---------- */
+  .feats{display:grid; gap:14px; grid-template-columns:1fr}
+  @media (min-width:640px){ .feats{grid-template-columns:1fr 1fr} }
+  @media (min-width:1040px){ .feats{grid-template-columns:repeat(3,1fr)} }
+  .feat{display:flex; gap:13px; align-items:flex-start; padding:16px 17px; border-radius:13px;
+        background:var(--card); border:1px solid var(--line)}
+  .feat .fi{flex:none; width:30px;height:30px;border-radius:9px; display:grid; place-items:center;
+            background:rgba(134,239,172,.1); border:1px solid rgba(134,239,172,.26); color:var(--ok)}
+  .feat .fi svg{width:17px;height:17px}
+  .feat h3{margin:1px 0 4px; font-size:14.5px}
+  .feat p{margin:0; color:var(--dim); font-size:13.5px; line-height:1.68}
+
+  /* ---------- 自建中继：通栏 ---------- */
+  .band{
+    display:flex; flex-wrap:wrap; gap:16px 26px; align-items:center; justify-content:space-between;
+    padding:24px clamp(18px,2.4vw,28px); border-radius:18px;
+    background:linear-gradient(120deg,rgba(91,124,250,.14),rgba(147,168,255,.06) 60%,transparent);
+    border:1px solid rgba(91,124,250,.28);
+  }
+  .band h2{margin:0 0 6px; font-size:clamp(18px,2vw,22px)}
+  .band p{margin:0; color:var(--dim); font-size:14px; max-width:62ch}
+
+  footer{padding:34px 0 46px; color:var(--dim2); font-size:12.5px}
+  footer .row{display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center}
+  footer .sep{opacity:.4}
+
+  @media (max-width:400px){ .btn{padding:11px 16px; font-size:14.5px} }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="logo">
+
+<!--
+  图标符号表：卡片与特性列表共用，避免同一段 SVG 重复十几遍。
+  ⚠️ 只在这里定义一次，用 <use href="#i-…"> 引用 —— 片段标识符（# 开头）
+     不会被 rewriteAssetPaths 改写，也不受 <base> 影响（已由 check-homepage 钉住）。
+-->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <g id="i-desktop" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="4" width="19" height="13" rx="2.5"/>
+      <path d="M9 20.5h6M12 17v3.5"/>
+      <path d="M7.5 12.5 10 10l2.5 2.5L17 8"/>
+    </g>
+    <g id="i-globe" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M3.2 9.5h17.6M3.2 14.5h17.6"/>
+      <path d="M12 3c2.6 2.6 4 5.7 4 9s-1.4 6.4-4 9c-2.6-2.6-4-5.7-4-9s1.4-6.4 4-9Z"/>
+    </g>
+    <g id="i-terminal" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="4" width="19" height="16" rx="2.5"/>
+      <path d="M6.5 9.5 9 12l-2.5 2.5M11.5 15h6"/>
+    </g>
+    <g id="i-route" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 8h9a4 4 0 0 1 0 8H8"/>
+      <path d="M6.5 5.5 4 8l2.5 2.5M10.5 18.5 13 16l-2.5-2.5"/>
+      <circle cx="18.5" cy="7.5" r="2.2"/>
+    </g>
+    <g id="i-check" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12.5 9.5 18 20 6.5"/>
+    </g>
+  </defs>
+</svg>
+
+<!-- 右上角入口：桌面钉在右上角；小屏隐藏（首屏已有同款主 CTA，见 CSS 注释） -->
+<a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
+
+<!-- ============================ 首屏 ============================ -->
+<div class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <p class="badge"><span class="pip"></span>不用公网 IP · 不用端口映射 · 不装 App</p>
+        <h1>出门在外，<br>也能回到<span class="grad">自己的电脑</span></h1>
+        <!--
+          ⚠️ 「内网 / 外网」是故意留的双关，别去澄清（见文件头的口径说明）。
+        -->
+        <p class="tagline">内网外网，一键打通<span class="dot">.</span></p>
+        <p class="lead">
+          在要访问的那台电脑上跑一条命令，它就会<b>主动连出去</b>；
+          之后无论你在公司、在咖啡厅还是在手机上，打开浏览器就能用上它 ——
+          远程桌面、内网网站、命令行终端，都在这一个页面里。
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://xtun.dev/login">进入控制台 →</a>
+          <a class="btn btn-ghost" href="#what">看看能做什么</a>
+        </div>
+      </div>
+
       <!--
-        标志：一个「会合点」。
-        四条连线（构成字母 x）各连一台设备 —— 内网的机器与外面的浏览器，
-        它们在中心那个亮点会合；这正是 xtun 在做的事：把两边「联通」起来。
-        ⚠️ 用【内联 SVG】而不是外部图片文件：本页会被 Worker 取回并重写资源路径，
-           内联就没有任何路径/跨域问题（也不需要额外的 MIME/CORS 配置）。
+        插图：左「内网里的几台机器」→ 中「会合点」→ 右「任何浏览器」。
+        全部内联 SVG（无外部图片、无脚本）；虚线用 CSS 动画在跑，
+        系统开了「减少动态效果」时会自动停下（见 prefers-reduced-motion）。
       -->
-      <svg viewBox="0 0 64 64" aria-hidden="true">
-        <g stroke="var(--accent)" stroke-width="5.5" stroke-linecap="round" opacity=".6">
-          <line x1="17" y1="17" x2="47" y2="47"/>
-          <line x1="47" y1="17" x2="17" y2="47"/>
+      <svg class="hero-art" viewBox="0 0 560 400" role="img" aria-label="内网里的电脑与服务器，经会合点，被任何浏览器访问">
+        <defs>
+          <linearGradient id="gPanel" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#22222b"/><stop offset="1" stop-color="#1a1a21"/>
+          </linearGradient>
+          <linearGradient id="gCloud" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#2b3350"/><stop offset="1" stop-color="#1d2135"/>
+          </linearGradient>
+          <linearGradient id="gAccent" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#93a8ff"/><stop offset="1" stop-color="#5b7cfa"/>
+          </linearGradient>
+        </defs>
+
+        <!-- 连线（先画，压在面板下面） -->
+        <path class="flow" d="M176 206 H250" stroke="#5b7cfa" stroke-width="2.2" fill="none" opacity=".85"/>
+        <path class="flow" d="M330 206 H392" stroke="#5b7cfa" stroke-width="2.2" fill="none" opacity=".85"/>
+        <path class="flow" d="M176 148 C214 118 250 120 286 150" stroke="#93a8ff" stroke-width="1.6" fill="none" opacity=".45"/>
+        <path class="flow" d="M176 264 C214 294 250 292 286 262" stroke="#93a8ff" stroke-width="1.6" fill="none" opacity=".45"/>
+
+        <!-- 左：内网里的机器 -->
+        <g>
+          <rect x="16" y="96" width="160" height="220" rx="16" fill="url(#gPanel)" stroke="#2e2e37"/>
+          <text x="34" y="124" fill="#9a9aa5" font-size="12" font-family="ui-monospace,Menlo,monospace">内网</text>
+          <g fill="#17171c" stroke="#33333f">
+            <rect x="30" y="138" width="132" height="42" rx="10"/>
+            <rect x="30" y="192" width="132" height="42" rx="10"/>
+            <rect x="30" y="246" width="132" height="42" rx="10"/>
+          </g>
+          <g fill="none" stroke="#93a8ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="42" y="151" width="17" height="12" rx="2"/><path d="M48 167h5M50.5 163v4"/>
+            <rect x="42" y="205" width="17" height="11" rx="2"/><path d="M42 219h17"/>
+            <path d="M42 258h17v9H42z"/><path d="M46 262h1.5M51 262h1.5M56 262h1.5"/>
+          </g>
+          <g fill="#c9c9d4" font-size="12.5">
+            <text x="68" y="164">家里的电脑</text>
+            <text x="68" y="218">笔记本</text>
+            <text x="68" y="271">NAS / 服务器</text>
+          </g>
         </g>
-        <g fill="var(--accent-soft)">
-          <circle cx="17" cy="17" r="7"/>
-          <circle cx="47" cy="17" r="7"/>
-          <circle cx="17" cy="47" r="7"/>
-          <circle cx="47" cy="47" r="7"/>
+
+        <!-- 中：会合点 -->
+        <g>
+          <ellipse class="pulse halo" cx="280" cy="206" rx="62" ry="62" fill="#5b7cfa" opacity=".3"/>
+          <path d="M236 232c-13 0-23-9-23-21 0-11 9-20 20-20 3-14 15-24 29-24 15 0 27 10 30 24 12 0 22 9 22 20 0 12-10 21-23 21z"
+                fill="url(#gCloud)" stroke="#3d4a75" stroke-width="1.4"/>
+          <circle cx="280" cy="206" r="24" fill="none" stroke="#5b7cfa" stroke-width="2" opacity=".7"/>
+          <circle cx="280" cy="206" r="13" fill="none" stroke="#93a8ff" stroke-width="2" opacity=".55"/>
+          <circle cx="280" cy="206" r="6" fill="#fff"/>
+          <text x="280" y="346" text-anchor="middle" fill="#9a9aa5" font-size="11.5">会合点（Cloudflare 或你的 VPS）</text>
         </g>
-        <!-- 会合点（中心）：白点 + 一圈细描边 —— 不用大面积光晕，小尺寸下会糊成脏圈 -->
-        <circle cx="32" cy="32" r="10.5" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".75"/>
-        <circle cx="32" cy="32" r="5.5" fill="#fff"/>
+
+        <!-- 右：任何浏览器 -->
+        <g>
+          <rect x="392" y="86" width="152" height="240" rx="18" fill="url(#gPanel)" stroke="#2e2e37"/>
+          <rect x="410" y="108" width="116" height="150" rx="10" fill="#131318" stroke="#33333f"/>
+          <circle cx="424" cy="122" r="3" fill="#3d3d4b"/><circle cx="434" cy="122" r="3" fill="#3d3d4b"/><circle cx="444" cy="122" r="3" fill="#3d3d4b"/>
+          <path d="M422 137h92" stroke="#2b2b34" stroke-width="6" stroke-linecap="round"/>
+          <g fill="#1c1c23" stroke="#2e2e37">
+            <rect x="420" y="152" width="96" height="26" rx="7"/>
+            <rect x="420" y="184" width="96" height="26" rx="7"/>
+            <rect x="420" y="216" width="96" height="26" rx="7"/>
+          </g>
+          <g fill="#86efac"><circle cx="431" cy="165" r="3"/><circle cx="431" cy="197" r="3"/><circle cx="431" cy="229" r="3"/></g>
+          <g fill="#c9c9d4" font-size="10.5">
+            <text x="441" y="169">电脑桌面</text>
+            <text x="441" y="201">内网网站</text>
+            <text x="441" y="233">终端</text>
+          </g>
+          <rect x="410" y="272" width="116" height="34" rx="10" fill="url(#gAccent)" opacity=".92"/>
+          <text x="468" y="294" text-anchor="middle" fill="#0f1020" font-size="12.5" font-weight="700">打开就能用</text>
+          <text x="468" y="352" text-anchor="middle" fill="#9a9aa5" font-size="12">任何浏览器 / 手机</text>
+        </g>
       </svg>
-      <h1>xtun<span class="dot">.</span></h1>
     </div>
-    <!--
-      ⚠️⚠️ 「内网 / 外网」是【故意留的双关】，别去"澄清"：
-          · 一指 局域网 ↔ 公网（VNC / RDP / HTTP 穿透那三条）；
-          · 二指 墙内 ↔ 墙外（SOCKS5 那条：借服务器线路出网）。
-         用户明确要求【意会即可、不要明说】—— 所以：
-         ❌ 不要加「（这里指局域网）」这类限定；
-         ❌ 也不要在页面上出现「翻墙 / 境外」字样（此前明确要求过，线上自检过）。
-         下面 SOCKS5 卡片用「统一出口 / 内网里不能直连外网的机器上网 / 按需切换线路」
-         这类中性说法，既守住了要求，也让想懂的人读得懂 —— 这就是刻意的分寸。
-    -->
-    <p class="tagline">内网外网，一键打通。</p>
-    <p class="lead">
-      内网机器<b>主动连出去</b>，因此<b>不需要公网 IP、也不用在路由器上做端口映射</b>。于是有两件事可用：
-      一是<b>本机借服务器线路出网</b>（本地起个 <span class="k">SOCKS5</span>，浏览器配一下即可）；
-      二是把内网的 <b>VNC / RDP / HTTP</b> 服务按需暴露到外网，用浏览器就能访问。
-      反向隧道的会合点默认在 Cloudflare，也可以换成自己的 VPS。
-    </p>
-    <!--
-      「进入控制台」：
-        · 桌面 —— position:fixed 钉在右上角，不占版面；
-        · 小屏（≤640px）—— 改成页面内的一块，落在总结下面。
-      ⚠️ 小屏【不要隐藏它】：它是页面上唯一看得见的登录入口。
-         网关首页还有个「双击 / 长按 → 登录」的手势（见 x-edge.js 的 injectLoginGesture），
-         但那个手势没人会猜到，不能拿它当唯一入口。
-      ⚠️ DOM 位置放在 header 里（而不是 body 顶部）只是为了小屏时的自然顺序：
-         桌面是 fixed，DOM 在哪都不影响观感。
-    -->
-    <a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
-  </header>
-
-  <main class="grid">
-    <section class="card">
-      <h2>代理上网 <span class="k">SOCKS5</span></h2>
-      <p class="use">给本机一个服务器侧出口</p>
-      <p class="body">本地起一个 SOCKS5 端口，浏览器或程序配一次就用；流量从服务器线路出网。
-        适合统一出口、给内网里不能直连外网的机器上网，或需要按需切换线路的场景 —
-        隧道内是裸字节透传，TLS 端到端、不做 MITM。</p>
-    </section>
-
-    <section class="card">
-      <h2>远程桌面 <span class="k">VNC</span></h2>
-      <p class="use">浏览器里操作内网机器</p>
-      <p class="body">无需公网 IP、无需端口映射，登录控制台点一下就能连。
-        用的是官方 noVNC 页面：缩放、压缩比、画质、剪贴板、全屏都在；
-        凭据按服务端要求自动切换（标准 VNC 与 macOS ARD 的账号/密码框不同）。</p>
-    </section>
-
-    <section class="card">
-      <h2>远程桌面 <span class="k">RDP</span></h2>
-      <p class="use">连公司 / 家里的 Windows</p>
-      <p class="body">同样是浏览器里操作，但走 Windows 原生远程桌面：
-        侧替浏览器做完 <span class="k">X.224</span> 协商与 TLS 终结，前端用 IronRDP。
-        多屏、画质、剪贴板更贴近原生；与 VNC 可同时开，各占一条设备条目。</p>
-    </section>
-
-    <section class="card">
-      <h2>内网服务开放 <span class="k">HTTP</span></h2>
-      <p class="use">给内网服务一个外网网址</p>
-      <p class="body">NAS 管理页、路由器后台、开发中的站点……挂到
-        <span class="k">&lt;设备&gt;.&lt;网关域&gt;</span> 就能从外网访问，不用端口映射；
-        支持流式响应与 <span class="k">WebSocket</span> 透传（看板、实时日志、应用自带的 WS 都能用）。</p>
-    </section>
-
-    <!-- 部署方式（不是第 5 个功能）：通栏另起一行 -->
-    <section class="card wide">
-      <h2>自建中继（可选）</h2>
-      <p class="use">不想依赖 Cloudflare 时</p>
-      <p class="body">反向隧道的会合点默认在 Cloudflare。也可以换成<b>自己的 VPS</b>：启动时把
-        <span class="k">-relay-url</span> 指过去即可，其余配置与客户端都不用改（复用同一个协议）。
-        家里和公司都在同一座城市时，走自己的机器往往更快更稳；
-        而且<b>中继域与网关域可同时访问同一个服务</b>，哪边顺手用哪边。</p>
-    </section>
-  </main>
+  </div>
 </div>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ============================ 能做什么 ============================ -->
+<section id="what">
+  <div class="wrap">
+    <span class="kicker">能做什么</span>
+    <h2>四件事，一个入口</h2>
+    <p class="sub">打开控制台，你的设备会列在一张清单里 —— 点一下就连上。不用记地址，也不用装客户端。</p>
+
+    <div class="cards">
+      <article class="card">
+        <div class="ico"><svg aria-hidden="true"><use href="#i-desktop"/></svg></div>
+        <h3>打开家里的电脑</h3>
+        <p class="when">在外面，用任何设备操控它</p>
+        <p>找一份忘带的文件、跑个只有家里那台机器能跑的程序、帮家里人看一眼电脑。
+           画面直接开在浏览器里，鼠标键盘就像坐在它面前。</p>
+        <div class="chips"><span class="chip">VNC</span><span class="chip">RDP</span><span class="chip">Windows / macOS / Linux</span></div>
+      </article>
+
+      <article class="card">
+        <div class="ico"><svg aria-hidden="true"><use href="#i-globe"/></svg></div>
+        <h3>内网网站，给个网址</h3>
+        <p class="when">在外网也能打开它</p>
+        <p>NAS 管理页、路由器后台、自己搭的服务……挂上去就有一个能从外网打开的网址；
+           网页里的实时刷新、长连接也照常工作。</p>
+        <div class="chips"><span class="chip">HTTP</span><span class="chip">WebSocket</span><span class="chip">流式响应</span></div>
+      </article>
+
+      <article class="card">
+        <div class="ico"><svg aria-hidden="true"><use href="#i-terminal"/></svg></div>
+        <h3>浏览器里的终端</h3>
+        <p class="when">不用装 SSH 客户端</p>
+        <p>在手机或任意电脑上打开一个网页终端就能敲命令。
+           登录用公钥，第一次连接请你确认一次指纹，之后不再打扰。</p>
+        <div class="chips"><span class="chip">Web SSH</span><span class="chip">公钥登录</span><span class="chip">可调字号</span></div>
+      </article>
+
+      <article class="card">
+        <div class="ico"><svg aria-hidden="true"><use href="#i-route"/></svg></div>
+        <h3>给机器换个出口</h3>
+        <p class="when">当它自己出不去的时候</p>
+        <p>有些机器不能直连外网，或者你希望几台机器走同一条线路。
+           本机起一个代理端口，浏览器或程序配一次就行，需要时还能按需切换线路。</p>
+        <div class="chips"><span class="chip">SOCKS5</span><span class="chip">统一出口</span><span class="chip">按需切换</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ============================ 三步上手 ============================ -->
+<section id="start">
+  <div class="wrap">
+    <span class="kicker">三步上手</span>
+    <h2>从零到连上，三分钟</h2>
+    <p class="sub">只有第一步需要在被访问的那台机器上操作一次；之后你面对的都只是一个网页。</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <h3>在被访问的机器上开一次</h3>
+        <p>下载对应系统的程序，填上访问令牌，指定要开放的服务（桌面 / 网站 / 终端）。它会常驻后台，掉线自己重连。</p>
+        <pre><span class="c"># 以「开放远程桌面」为例</span>
+./xtun <span class="k">-token</span> 你的令牌 <span class="k">-vnc</span></pre>
+      </div>
+
+      <div class="step">
+        <div class="n">2</div>
+        <h3>用手机上的动态码登录</h3>
+        <p>浏览器打开控制台，输入验证器 App 里那串 6 位动态码。
+           登录状态只记在这台浏览器上，换设备要重新验证。</p>
+      </div>
+
+      <div class="step">
+        <div class="n">3</div>
+        <h3>点一下，就连上了</h3>
+        <p>你的设备会出现在清单里（在线的会亮着）。
+           想连哪台点哪台 —— 新机器连上过一次，之后都自动出现在这里。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ============================ 为什么放心 ============================ -->
+<section id="why">
+  <div class="wrap">
+    <span class="kicker">为什么放心</span>
+    <h2>该有的都有，不该有的都没有</h2>
+    <p class="sub">下面这些不是宣传语，都是默认行为。</p>
+
+    <div class="feats">
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>不用公网 IP，不用动路由器</h3><p>是被访问的机器主动连出去的，所以没有端口映射、没有固定 IP 也照样能用。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>端到端加密，不做中间人</h3><p>隧道里只搬字节，不会把你的内容解开再重打包；去 HTTPS 网站时，证书校验仍然发生在你和目标网站之间。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>动态码 + 签名登录态</h3><p>登录要手机上的动态码，连续输错会被限速；一旦换了动态码密钥，所有已登录的设备立刻失效。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>可以再叠一层应用层加密</h3><p>不放心传输链路时打开端到端加密：内容在你的客户端与目标之间加密，中途即使被看到也读不出来。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>手机、平板、公司电脑都能用</h3><p>只要有个现代浏览器就行。还能「安装成应用」，桌面图标点开直接是全屏控制台。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>设备清单自动维护</h3><p>哪台在线、什么时候连过，页面自己更新；不用手工登记，也能一键清掉不再用的记录。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>线路会自己挑</h3><p>网络不稳时可以先扫一遍，挑出当前更快的那条路；之后自动定期重挑，你的操作方式不用改。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>中继可以换成自己的</h3><p>不想依赖第三方时，把中转放到自己的服务器上，家里和公司的配置都不用改。</p></div></div>
+
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div><h3>掉线自己回来</h3><p>网络抖动、换 Wi-Fi、休眠唤醒都不用手动重启；连接恢复后设备会重新出现在清单里。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 自建中继 ============================ -->
+<section id="relay">
+  <div class="wrap">
+    <div class="band">
+      <div>
+        <h2>想完全自己掌控？把中转放到你的服务器上</h2>
+        <p>家里和公司都在同一座城市、又有一台双方都够得着的服务器时，让它来会合往往更快更稳。
+           程序与用法都不变，只改一个地址。</p>
+      </div>
+      <a class="btn btn-ghost" href="https://xtun.dev/login">先进控制台看看 →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <span>xtun</span><span class="sep">·</span>
+      <span>内网外网，一键打通</span><span class="sep">·</span>
+      <span>双击页面任意处也可以进入控制台</span>
+    </div>
+  </div>
+</footer>
+
 </body>
 </html>
