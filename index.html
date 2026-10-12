@@ -76,11 +76,21 @@
     登录链接挪到首屏插图里（「打开就能用」那块）—— 不想让无关的人一眼看到入口。
     所以这里不再有 fixed 按钮，整页也**没有任何 .btn 样式**了。
   */
-  .topbar{padding:clamp(18px,3.4vh,30px) 0 0}
+  /*
+    ⚠️ 顶栏在 .hero【里面】（见 HTML）—— 这样 .hero 的背景光/网格自然覆盖品牌行，
+       不会出现「顶部的背景只显示了前半截」（用户 2026-10-12 报的：背景原来挂在
+       首屏上，而品牌行在它外面，于是最顶上那一块完全没有背景）。
+    slogan 也从第 1 页搬到这里（用户要求「放在 logo 后面，或者靠右位置」）：
+    .row 是 flex + space-between —— 品牌靠左、slogan 靠右。
+  */
+  .topbar{padding:clamp(18px,3.4vh,30px) 0 clamp(16px,2.4vh,26px)}
+  .topbar .row{display:flex; align-items:center; justify-content:space-between; gap:14px}
   .brand{display:flex; align-items:center; gap:clamp(8px,1vw,11px)}
   .brand svg{width:clamp(28px,2.6vw,34px); height:auto; flex:none}
   .brand .wordmark{font-size:19px; font-weight:700; letter-spacing:-.02em}
   .brand .wordmark .dot{color:var(--accent)}
+  .slogan{margin:0; color:var(--dim); font-size:13.5px; letter-spacing:.01em; white-space:nowrap}
+  @media (max-width:430px){ .slogan{font-size:12.5px} }
 
   /* ---------- 首屏 banner：两页幻灯片 ---------- */
   .hero{
@@ -126,8 +136,8 @@
   #hero-s2:checked ~ .slides .slide-a{opacity:0; visibility:hidden}
   /* 还没点过圆点 → 自动轮播（两页用同一段 keyframes，各占一半时间） */
   @supports selector(:has(*)){
-    .deck:not(:has(.deck-radio:checked)) .slide-a{animation:heroA 16s ease-in-out infinite}
-    .deck:not(:has(.deck-radio:checked)) .slide-b{animation:heroB 16s ease-in-out infinite}
+    .deck:not(:has(.deck-radio:checked)) .slide-a{animation:heroA 12s ease-in-out infinite}
+    .deck:not(:has(.deck-radio:checked)) .slide-b{animation:heroB 12s ease-in-out infinite}
   }
   @keyframes heroA{0%,42%{opacity:1;visibility:visible;transform:none}
                    50%,92%{opacity:0;visibility:hidden}
@@ -140,30 +150,38 @@
   @media (min-width:940px){ .slide-grid{grid-template-columns:1.02fr .98fr} }
 
   /* 圆点：既是状态指示也是唯一的切换控件 */
-  .dots{display:flex; gap:12px; margin:clamp(18px,3vh,26px) 0 0}
   /*
-    ⚠️ 视觉上是一条 5px 的细条，但**可点区域要 ~30px 高**：手机上点 5px 高的东西
-       基本点不中（实测就是点不动）。做法是给 label 加竖向 padding，
-       再用 `background-clip:content-box` 让背景只画在中间那条上。
+    指示器：**label 只当可点区域（36×32，手机上点得中），可见的圆点/长条是里面的 span**。
+    ⚠️⚠️ 上一版把可见形状直接画在 label 上（`width/height` + `background-clip:content-box`），
+       结果后面几条规则用的 `background:` **简写**把 `background-clip` 重置回 border-box，
+       26×29 的外框被涂成椭圆 —— 用户看到的就是「选中变圆、未选是长条」（2026-10-12 报的）。
+       教训：**别用 background 简写去改一个已经设了 background-clip 的元素**。
+    形状语义与常见轮播一致：**未选中 = 小圆点，选中 = 长条**。
   */
-  .dots label{
-    width:26px; height:5px; padding:12px 0; box-sizing:content-box;
-    background-clip:content-box; border-radius:99px; cursor:pointer;
-    background-color:#3a3a46; transition:background-color .2s, width .2s;
+  .dots{display:flex; gap:8px; margin:clamp(18px,3vh,26px) 0 0}
+  .dots label{width:36px; height:32px; display:grid; place-items:center; cursor:pointer}
+  .dots label span{
+    display:block; width:8px; height:8px; border-radius:50%;
+    background-color:#3a3a46; transition:width .25s, border-radius .25s, background-color .25s;
   }
-  .dots label:hover{background:#4c4c5c}
-  .dots label:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
-  #hero-s1:checked ~ .dots label[for="hero-s1"],
-  #hero-s2:checked ~ .dots label[for="hero-s2"]{background:var(--accent); width:34px}
+  .dots label:hover span{background-color:#4c4c5c}
+  .dots label:focus-visible{outline:2px solid var(--accent-soft); outline-offset:-2px; border-radius:8px}
+  #hero-s1:checked ~ .dots label[for="hero-s1"] span,
+  #hero-s2:checked ~ .dots label[for="hero-s2"] span{
+    width:26px; border-radius:99px; background-color:var(--accent);
+  }
   /* 自动轮播时圆点也跟着亮（用户一点就交给他手动控制） */
   @supports selector(:has(*)){
-    .deck:not(:has(.deck-radio:checked)) .dots label[for="hero-s1"]{animation:dotA 16s ease-in-out infinite}
-    .deck:not(:has(.deck-radio:checked)) .dots label[for="hero-s2"]{animation:dotB 16s ease-in-out infinite}
+    .deck:not(:has(.deck-radio:checked)) .dots label[for="hero-s1"] span{animation:dotA 12s ease-in-out infinite}
+    .deck:not(:has(.deck-radio:checked)) .dots label[for="hero-s2"] span{animation:dotB 12s ease-in-out infinite}
   }
-  @keyframes dotA{0%,42%{background:var(--accent);width:34px} 50%,92%{background:#3a3a46;width:26px}
-                  100%{background:var(--accent);width:34px}}
-  @keyframes dotB{0%,42%{background:#3a3a46;width:26px} 50%,92%{background:var(--accent);width:34px}
-                  100%{background:#3a3a46;width:26px}}
+  /* 自动轮播时指示器跟着走；用 background-color（不是 background 简写，见上面的教训） */
+  @keyframes dotA{0%,42%{width:26px;border-radius:99px;background-color:var(--accent)}
+                  50%,92%{width:8px;border-radius:50%;background-color:#3a3a46}
+                  100%{width:26px;border-radius:99px;background-color:var(--accent)}}
+  @keyframes dotB{0%,42%{width:8px;border-radius:50%;background-color:#3a3a46}
+                  50%,92%{width:26px;border-radius:99px;background-color:var(--accent)}
+                  100%{width:8px;border-radius:50%;background-color:#3a3a46}}
   /* 系统开了「减少动态效果」→ 不自动轮播（第一页常显），圆点仍可手动切 */
   @media (prefers-reduced-motion:reduce){
     .slide,.dots label{animation:none !important}
@@ -272,14 +290,28 @@
   .feat p{margin:0; color:var(--dim); font-size:13.5px; line-height:1.68}
 
   /* ---------- 自建中继：通栏 ---------- */
+  /*
+    ⚠️ 原来是 flex + space-between 且删掉右侧按钮后只剩一个子元素 → 文字挤在左边、
+       右边一大片空；`max-width:62ch` 又让最后一行在中间断得很难看
+       （用户 2026-10-12：「中继的描述小字自己半中间换行了」）。
+       现在：不限宽（跟着容器走）+ 下面挂三条要点，把整块填满。
+  */
   .band{
-    display:flex; flex-wrap:wrap; gap:16px 26px; align-items:center; justify-content:space-between;
-    padding:24px clamp(18px,2.4vw,28px); border-radius:18px;
+    padding:clamp(22px,3vw,30px) clamp(18px,2.4vw,28px); border-radius:18px;
     background:linear-gradient(120deg,rgba(91,124,250,.14),rgba(147,168,255,.06) 60%,transparent);
     border:1px solid rgba(91,124,250,.28);
   }
-  .band h2{margin:0 0 6px; font-size:clamp(18px,2vw,22px)}
-  .band p{margin:0; color:var(--dim); font-size:14px; max-width:62ch}
+  .band h2{margin:0 0 8px; font-size:clamp(18px,2vw,22px)}
+  .band p{margin:0; color:var(--dim); font-size:14px}
+  .band-list{list-style:none; display:grid; gap:9px 26px; margin:16px 0 0; padding:0;
+             grid-template-columns:1fr}
+  @media (min-width:760px){ .band-list{grid-template-columns:1fr 1fr} }
+  .band-list li{position:relative; padding-left:22px; color:var(--dim); font-size:13.5px; line-height:1.65}
+  .band-list li::before{
+    content:""; position:absolute; left:6px; top:8px; width:6px; height:6px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 0 3px rgba(91,124,250,.16);
+  }
+  .band-list b{color:var(--fg); font-weight:650}
 
   footer{padding:34px 0 46px; color:var(--dim2); font-size:12.5px}
   footer .row{display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center}
@@ -297,31 +329,73 @@
 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <defs>
-    <g id="i-desktop" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <symbol id="i-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2.5" y="4" width="19" height="13" rx="2.5"/>
       <path d="M9 20.5h6M12 17v3.5"/>
       <path d="M7.5 12.5 10 10l2.5 2.5L17 8"/>
-    </g>
-    <g id="i-globe" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9"/>
       <path d="M3.2 9.5h17.6M3.2 14.5h17.6"/>
       <path d="M12 3c2.6 2.6 4 5.7 4 9s-1.4 6.4-4 9c-2.6-2.6-4-5.7-4-9s1.4-6.4 4-9Z"/>
-    </g>
-    <g id="i-terminal" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    </symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2.5" y="4" width="19" height="16" rx="2.5"/>
       <path d="M6.5 9.5 9 12l-2.5 2.5M11.5 15h6"/>
-    </g>
-    <g id="i-route" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    </symbol>
+    <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 8h9a4 4 0 0 1 0 8H8"/>
       <path d="M6.5 5.5 4 8l2.5 2.5M10.5 18.5 13 16l-2.5-2.5"/>
       <circle cx="18.5" cy="7.5" r="2.2"/>
-    </g>
-    <g id="i-check" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 12.5 9.5 18 20 6.5"/>
-    </g>
+    </symbol>
+    <symbol id="i-router" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="13" width="18" height="7.5" rx="2.5"/>
+      <path d="M7 16.75h.01M10.5 16.75h.01"/>
+      <path d="M6 13V9.6M18 13V9.6M6.2 9.6 4 6M17.8 9.6 20 6"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21c4.4-1.9 6.5-5 6.5-9.2V5.6L12 3 5.5 5.6v6.2C5.5 16 7.6 19.1 12 21Z"/>
+      <path d="M9 12.2 11.2 14.4 15.2 10.4"/>
+    </symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="16" r="3.6"/>
+      <path d="M10.6 13.4 19 5M16 8l2.2 2.2M13.6 10.4 15.8 12.6"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.5"/>
+      <path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9M12 14.4v2.2"/>
+    </symbol>
+    <symbol id="i-devices" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="5.5" width="12.5" height="9" rx="2"/>
+      <path d="M6 18h6"/>
+      <rect x="17" y="9" width="4.5" height="9.5" rx="1.6"/>
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7h.01M8 7h12M4 12h.01M8 12h12M4 17h.01M8 17h12"/>
+    </symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 18a8.5 8.5 0 1 1 16 0"/>
+      <path d="m12 14 4.2-4.6M4.6 18h14.8"/>
+    </symbol>
+    <symbol id="i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.5" y="4" width="17" height="6" rx="2"/>
+      <rect x="3.5" y="14" width="17" height="6" rx="2"/>
+      <path d="M7.5 7h.01M7.5 17h.01"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 12a8 8 0 1 1-2.6-5.9"/>
+      <path d="M20 4v4.5h-4.5"/>
+    </symbol>
   </defs>
 </svg>
 
+
+<!-- ============================ 首屏 banner（两页幻灯片） ============================ -->
+<div class="hero">
+  <div class="wrap">
 <!-- ============================ 顶部品牌行 ============================ -->
 <header class="topbar">
   <div class="wrap">
@@ -331,7 +405,8 @@
       ⚠️ 内联 SVG：本页会被 Worker 取回并重写资源路径，内联就没有任何路径问题。
       ⚠️ 字标不是 <h1>（语义主标题是首屏那句价值主张），品牌只表示「谁做的」。
     -->
-    <div class="brand">
+    <div class="row">
+      <div class="brand">
       <svg viewBox="0 0 64 64" aria-hidden="true">
         <g stroke="var(--accent)" stroke-width="5.5" stroke-linecap="round" opacity=".6">
           <line x1="17" y1="17" x2="47" y2="47"/>
@@ -347,13 +422,12 @@
         <circle cx="32" cy="32" r="5.5" fill="#fff"/>
       </svg>
       <span class="wordmark">xtun<span class="dot">.</span></span>
+      </div>
+      <!-- ⚠️「内网 / 外网」是故意留的双关，别去澄清 -->
+      <p class="slogan">内网外网，一键打通<span class="dot" style="color:var(--accent)">.</span></p>
     </div>
   </div>
 </header>
-
-<!-- ============================ 首屏 banner（两页幻灯片） ============================ -->
-<div class="hero">
-  <div class="wrap">
     <div class="deck">
       <!--
         ⚠️ 幻灯片的「状态」就是这两个 radio：下面每页的显隐、圆点的亮暗全靠 :checked。
@@ -374,8 +448,6 @@
               -->
               <p class="badge"><span class="pip"></span>不用公网 IP · 不用端口映射 · 不装 App</p>
               <h1>出门在外，<br>也能回到<span class="grad">自己的电脑</span></h1>
-              <!-- ⚠️「内网 / 外网」是故意留的双关，别去澄清 -->
-              <p class="tagline">内网外网，一键打通<span class="dot">.</span></p>
               <p class="lead">
                 在要访问的那台电脑上跑一条命令，它就会<b>主动连出去</b>；
                 之后无论你在公司、在咖啡厅还是在手机上，打开浏览器就能用上它 ——
@@ -575,8 +647,8 @@
 
       <!-- 圆点：点它切换（label 是纯 CSS 的开关，不需要脚本） -->
       <div class="dots">
-        <label for="hero-s1" aria-label="第一页：回家（内网穿透）"></label>
-        <label for="hero-s2" aria-label="第二页：出门（线路优选）"></label>
+        <label for="hero-s1" aria-label="第一页：回家（内网穿透）"><span></span></label>
+        <label for="hero-s2" aria-label="第二页：出门（线路优选）"><span></span></label>
       </div>
     </div>
   </div>
@@ -684,31 +756,31 @@
     <p class="sub">下面这些不是宣传语，都是默认行为。</p>
 
     <div class="feats">
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-router"/></svg></div>
         <div><h3>不用公网 IP，不用动路由器</h3><p>是被访问的机器主动连出去的，所以没有端口映射、没有固定 IP 也照样能用。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
         <div><h3>不碰你的内容，不做中间人</h3><p>隧道里只搬字节，不会把你的内容解开再重打包；访问 HTTPS 网站时，证书校验仍然发生在你和目标网站之间（TLS 端到端）。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
         <div><h3>动态码 + 签名登录态</h3><p>登录要手机上的动态码，连续输错会被限速；一旦换了动态码密钥，所有已登录的设备立刻失效。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-lock"/></svg></div>
         <div><h3>可以再叠一层应用层加密</h3><p>不放心传输链路时打开端到端加密：内容在你的客户端与目标之间加密，中途即使被看到也读不出来。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-devices"/></svg></div>
         <div><h3>手机、平板、公司电脑都能用</h3><p>只要有个现代浏览器就行。还能「安装成应用」，桌面图标点开直接是全屏控制台。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-list"/></svg></div>
         <div><h3>设备清单自动维护</h3><p>哪台在线、什么时候连过，页面自己更新；不用手工登记，也能一键清掉不再用的记录。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-gauge"/></svg></div>
         <div><h3>线路会自己挑</h3><p>网络不稳时可以先扫一遍，挑出当前更快的那条路；之后自动定期重挑，你的操作方式不用改。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-server"/></svg></div>
         <div><h3>中继可以换成自己的</h3><p>不想依赖第三方时，把中转放到自己的服务器上，家里和公司的配置都不用改。</p></div></div>
 
-      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="feat"><div class="fi"><svg aria-hidden="true"><use href="#i-refresh"/></svg></div>
         <div><h3>掉线自己回来</h3><p>网络抖动、换 Wi-Fi、休眠唤醒都不用手动重启；连接恢复后设备会重新出现在清单里。</p></div></div>
     </div>
   </div>
@@ -720,8 +792,14 @@
     <div class="band">
       <div>
         <h2>想完全自己掌控？把中转放到你的服务器上</h2>
-        <p>家里和公司都在同一座城市、又有一台双方都够得着的服务器时，让它来会合往往更快更稳。
-           程序与用法都不变，只改一个地址。</p>
+        <p>默认的中转在 Cloudflare 上，开箱可用。也可以换成一台北<strong>双方都够得着</strong>的服务器
+           —— 自己的 VPS、家里的软路由、公司一台常开的机器都行。家里和公司在同一座城市时，
+           让它来会合少绕一圈，往往更快也更稳。</p>
+        <ul class="band-list">
+          <li><b>只改一个地址</b>：已开放的桌面 / 网站 / 终端都不用动，用法完全一样</li>
+          <li><b>网页入口也跟着走</b>：设备列表、登录、各个连接页面都由它一起提供，不用另配</li>
+          <li><b>不依赖第三方</b>：也可以只跑它一个（不装 Cloudflare），支持自带证书 / nginx 反代</li>
+        </ul>
       </div>
     </div>
   </div>
