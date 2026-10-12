@@ -1,11 +1,11 @@
 {
-  "version": 21,
+  "version": 22,
   "assets_origin": "https://assets.xtun.dev",
   "pins": {
     "/": {
-      "sha256": "a1990a15f1521cc5589546a0612c9b691eecee1a65e25ef348af2a7afe5a4e38",
-      "sha256Norm": "9f2085520f1cadf296f8d26dd850a1917a2693bb6a5baa22f7a750335afc5978",
-      "sri": "sha384-sp7krr10gsn7lVh/+y3xCYXZuQl3RlyOWlkLuM0TAoPghyi0QJTQYyG33P7XCLUN"
+      "sha256": "8f9ba771b3ee7cc52b811605c0e123d996b31c838b2c88e7465b1ba284fc22d2",
+      "sha256Norm": "610a254c505bce5d7e0026a13a5cfc11f18d679373c21f5485397f2e8244c112",
+      "sri": "sha384-FQRR9fw5tyqXnQKo7+PkKJzdLwmLnG5QjsCbPfcMIJ9OQdmGe2nNeCLc1LdpIHeB"
     },
     "/vnc.html": {
       "sha256": "5578c32792b94967a2c5ec69e44e9b450dd5dc2e5e5fa9e98ac37ecfb2255efb",

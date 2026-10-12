@@ -70,34 +70,22 @@
 
   .wrap{width:100%; max-width:var(--wrap); margin:0 auto; padding:0 clamp(16px,2.4vw,28px)}
 
-  /* ---------- 右上角「进入控制台」 ---------- */
-  /* 桌面：fixed 钉在右上角，不占版面；滚动时一直在 —— 随时能进去 */
-  .enter{
-    position:fixed; top:var(--edge); right:var(--edge); z-index:50;
-    display:inline-flex; align-items:center; gap:8px;
-    padding:10px 16px; border-radius:12px; font-size:14px; font-weight:650;
-    color:#fff; background:var(--accent); text-decoration:none;
-    box-shadow:0 10px 28px -12px rgba(91,124,250,.95);
-  }
-  .enter:hover{background:#6d8bfb}
-  .enter:focus-visible,.btn:focus-visible,a:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
+  /* ---------- 顶部品牌行（logo 在最上面） ---------- */
   /*
-    小屏：改成 static，落进首屏文案流里（DOM 位置见下面 hero 里那个 <a>）。
-    ⚠️ 为什么不能继续 fixed：滚动时会盖住卡片。
-    ⚠️ 为什么不能 display:none：它是**页面上唯一的「进入控制台」按钮**
-       （用户 2026-10-12 要求「只保留右上角那个」）—— 手势（双击 / 长按）没人会猜到，
-       不能当唯一入口。
-    ⚠️ DOM 位置必须放在首屏文案里：它是 <body> 的第一个元素时，改成 static 会跑到
-       徽标【上面】去（改版时踩过）。
+    ⚠️ 用户 2026-10-12 要求：logo 放最上面；**右上角那个「进入控制台」按钮去掉**，
+    登录链接挪到首屏插图里（「打开就能用」那块）—— 不想让无关的人一眼看到入口。
+    所以这里不再有 fixed 按钮，整页也**没有任何 .btn 样式**了。
   */
-  @media (max-width:640px){
-    .enter{position:static; width:100%; justify-content:center; margin:0 0 16px}
-  }
+  .topbar{padding:clamp(18px,3.4vh,30px) 0 0}
+  .brand{display:flex; align-items:center; gap:clamp(8px,1vw,11px)}
+  .brand svg{width:clamp(28px,2.6vw,34px); height:auto; flex:none}
+  .brand .wordmark{font-size:19px; font-weight:700; letter-spacing:-.02em}
+  .brand .wordmark .dot{color:var(--accent)}
 
-  /* ---------- 首屏 ---------- */
+  /* ---------- 首屏 banner：两页幻灯片 ---------- */
   .hero{
     position:relative; overflow:hidden;
-    padding:clamp(56px,9vh,104px) 0 clamp(28px,5vh,56px);
+    padding:clamp(26px,4.5vh,52px) 0 clamp(28px,5vh,56px);
   }
   /* 背景光：两块径向渐变 + 一层极淡的网格。全部 CSS，无外部图片 */
   .hero::before{
@@ -115,8 +103,71 @@
     -webkit-mask-image:radial-gradient(70% 60% at 50% 0%,#000 0%,transparent 78%);
   }
   .hero .wrap{position:relative; z-index:1}
-  .hero-grid{display:grid; gap:clamp(24px,4vw,48px); align-items:center}
-  @media (min-width:940px){ .hero-grid{grid-template-columns:1.02fr .98fr} }
+
+  /*
+    幻灯片：**纯 CSS**（radio + :checked + label 当圆点）。
+    ⚠️ 为什么不用 JS：本页被网关注入了「双击 / 长按 → 登录」的手势脚本，
+       自己再挂一套手势/计时器会互相打架；而且这页要求「一行 JS 都没有」
+       （`check:homepage` 会断言）。幻灯片的切换用 label 就够了，不需要脚本。
+    ⚠️ 两页**叠在同一个网格单元**里（grid-area:1/1）→ 容器高度取两者较大者，
+       切换时不会跳高度；隐藏用 opacity/visibility，布局仍然占位。
+  */
+  .deck{position:relative}
+  /* 真正被点的是下面的 label；radio 本体视觉隐藏但**保持可聚焦**（键盘可达） */
+  .deck-radio{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+  .slides{display:grid}
+  .slide{grid-area:1/1; opacity:0; visibility:hidden;
+         transition:opacity .38s ease, transform .38s ease; transform:translateY(6px)}
+  /* 兜底：没选任何一页时（老浏览器 / 用户还没点）先显示第一页 */
+  .slide-a{opacity:1; visibility:visible; transform:none}
+  #hero-s1:checked ~ .slides .slide-a,
+  #hero-s2:checked ~ .slides .slide-b{opacity:1; visibility:visible; transform:none}
+  #hero-s1:checked ~ .slides .slide-b,
+  #hero-s2:checked ~ .slides .slide-a{opacity:0; visibility:hidden}
+  /* 还没点过圆点 → 自动轮播（两页用同一段 keyframes，各占一半时间） */
+  @supports selector(:has(*)){
+    .deck:not(:has(.deck-radio:checked)) .slide-a{animation:heroA 16s ease-in-out infinite}
+    .deck:not(:has(.deck-radio:checked)) .slide-b{animation:heroB 16s ease-in-out infinite}
+  }
+  @keyframes heroA{0%,42%{opacity:1;visibility:visible;transform:none}
+                   50%,92%{opacity:0;visibility:hidden}
+                   100%{opacity:1;visibility:visible;transform:none}}
+  @keyframes heroB{0%,42%{opacity:0;visibility:hidden}
+                   50%,92%{opacity:1;visibility:visible;transform:none}
+                   100%{opacity:0;visibility:hidden}}
+
+  .slide-grid{display:grid; gap:clamp(24px,4vw,48px); align-items:center}
+  @media (min-width:940px){ .slide-grid{grid-template-columns:1.02fr .98fr} }
+
+  /* 圆点：既是状态指示也是唯一的切换控件 */
+  .dots{display:flex; gap:12px; margin:clamp(18px,3vh,26px) 0 0}
+  /*
+    ⚠️ 视觉上是一条 5px 的细条，但**可点区域要 ~30px 高**：手机上点 5px 高的东西
+       基本点不中（实测就是点不动）。做法是给 label 加竖向 padding，
+       再用 `background-clip:content-box` 让背景只画在中间那条上。
+  */
+  .dots label{
+    width:26px; height:5px; padding:12px 0; box-sizing:content-box;
+    background-clip:content-box; border-radius:99px; cursor:pointer;
+    background-color:#3a3a46; transition:background-color .2s, width .2s;
+  }
+  .dots label:hover{background:#4c4c5c}
+  .dots label:focus-visible{outline:2px solid var(--accent-soft); outline-offset:3px}
+  #hero-s1:checked ~ .dots label[for="hero-s1"],
+  #hero-s2:checked ~ .dots label[for="hero-s2"]{background:var(--accent); width:34px}
+  /* 自动轮播时圆点也跟着亮（用户一点就交给他手动控制） */
+  @supports selector(:has(*)){
+    .deck:not(:has(.deck-radio:checked)) .dots label[for="hero-s1"]{animation:dotA 16s ease-in-out infinite}
+    .deck:not(:has(.deck-radio:checked)) .dots label[for="hero-s2"]{animation:dotB 16s ease-in-out infinite}
+  }
+  @keyframes dotA{0%,42%{background:var(--accent);width:34px} 50%,92%{background:#3a3a46;width:26px}
+                  100%{background:var(--accent);width:34px}}
+  @keyframes dotB{0%,42%{background:#3a3a46;width:26px} 50%,92%{background:var(--accent);width:34px}
+                  100%{background:#3a3a46;width:26px}}
+  /* 系统开了「减少动态效果」→ 不自动轮播（第一页常显），圆点仍可手动切 */
+  @media (prefers-reduced-motion:reduce){
+    .slide,.dots label{animation:none !important}
+  }
 
   .badge{
     display:inline-flex; align-items:center; gap:9px; margin:0 0 18px;
@@ -124,38 +175,20 @@
     background:rgba(91,124,250,.12); border:1px solid rgba(91,124,250,.32);
   }
   .badge .pip{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(134,239,172,.16)}
-  /*
-    品牌行：会合点标志 + 小写字标。
-    ⚠️ 字标**不是** <h1> —— 语义上的主标题是下面那句价值主张（h1），
-       品牌在这里只是「谁做的」。（旧版把 xtun. 当 h1，是因为那时整页只有一个标题。）
-  */
-  .brand{display:flex; align-items:center; gap:clamp(8px,1vw,11px); margin:0 0 16px}
-  .brand svg{width:clamp(28px,2.6vw,34px); height:auto; flex:none}
-  .brand .wordmark{font-size:19px; font-weight:700; letter-spacing:-.02em}
-  .brand .wordmark .dot{color:var(--accent)}
-  h1{
-    margin:0 0 14px; font-size:clamp(30px,4.6vw,50px); line-height:1.16;
+  h1,.hero-h2{
+    margin:0 0 14px; font-size:clamp(28px,4.2vw,46px); line-height:1.16;
     font-weight:750; letter-spacing:-.022em;
   }
   /* 关键词做成渐变字：整页只有这一处，避免花 */
-  h1 .grad{
+  h1 .grad,.hero-h2 .grad{
     background:linear-gradient(96deg,var(--accent-soft),#c9b6ff 55%,var(--accent-soft));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
   .tagline{margin:0 0 12px; font-size:clamp(17px,1.7vw,20px); font-weight:650}
   .tagline .dot{color:var(--accent)}
-  .lead{margin:0 0 26px; max-width:56ch; color:var(--dim); font-size:clamp(14.5px,1.15vw,16px)}
+  .lead{margin:0 0 0; max-width:56ch; color:var(--dim); font-size:clamp(14.5px,1.15vw,16px)}
   .lead b{color:var(--fg)}
-
-  .cta{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
-  .btn{
-    display:inline-flex; align-items:center; gap:9px; text-decoration:none;
-    padding:12px 20px; border-radius:12px; font-size:15px; font-weight:650;
-  }
-  .btn-primary{color:#fff; background:var(--accent); box-shadow:0 12px 30px -14px rgba(91,124,250,1)}
-  .btn-primary:hover{background:#6d8bfb}
-  .btn-ghost{color:var(--fg); background:rgba(255,255,255,.04); border:1px solid var(--line)}
-  .btn-ghost:hover{border-color:#454555; background:rgba(255,255,255,.07)}
+  .chiprow{display:flex; flex-wrap:wrap; gap:6px; margin:16px 0 0}
 
   .hero-art{width:100%; height:auto; display:block; filter:drop-shadow(0 26px 60px rgba(0,0,0,.45))}
   /* 数据流：虚线在跑（纯 CSS）；reduced-motion 会把它停掉 */
@@ -289,136 +322,262 @@
   </defs>
 </svg>
 
-<!-- ============================ 首屏 ============================ -->
+<!-- ============================ 顶部品牌行 ============================ -->
+<header class="topbar">
+  <div class="wrap">
+    <!--
+      标志：一个「会合点」—— 四条连线（构成字母 x）各连一台机器，
+      它们在中心那个亮点会合。这正是 xtun 在做的事：把两边连起来。
+      ⚠️ 内联 SVG：本页会被 Worker 取回并重写资源路径，内联就没有任何路径问题。
+      ⚠️ 字标不是 <h1>（语义主标题是首屏那句价值主张），品牌只表示「谁做的」。
+    -->
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <g stroke="var(--accent)" stroke-width="5.5" stroke-linecap="round" opacity=".6">
+          <line x1="17" y1="17" x2="47" y2="47"/>
+          <line x1="47" y1="17" x2="17" y2="47"/>
+        </g>
+        <g fill="var(--accent-soft)">
+          <circle cx="17" cy="17" r="7"/>
+          <circle cx="47" cy="17" r="7"/>
+          <circle cx="17" cy="47" r="7"/>
+          <circle cx="47" cy="47" r="7"/>
+        </g>
+        <circle cx="32" cy="32" r="10.5" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".75"/>
+        <circle cx="32" cy="32" r="5.5" fill="#fff"/>
+      </svg>
+      <span class="wordmark">xtun<span class="dot">.</span></span>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ 首屏 banner（两页幻灯片） ============================ -->
 <div class="hero">
   <div class="wrap">
-    <div class="hero-grid">
-      <div>
-        <p class="badge"><span class="pip"></span>不用公网 IP · 不用端口映射 · 不装 App</p>
-        <!--
-          标志：一个「会合点」—— 四条连线（构成字母 x）各连一台机器，
-          它们在中心那个亮点会合。这正是 xtun 在做的事：把两边连起来。
-          ⚠️ 内联 SVG：本页会被 Worker 取回并重写资源路径，内联就没有任何路径问题。
-          ⚠️ 它的配色用 CSS 变量，跟页面同一套（改主题时自动跟着走）。
-        -->
-        <div class="brand">
-          <svg viewBox="0 0 64 64" aria-hidden="true">
-            <g stroke="var(--accent)" stroke-width="5.5" stroke-linecap="round" opacity=".6">
-              <line x1="17" y1="17" x2="47" y2="47"/>
-              <line x1="47" y1="17" x2="17" y2="47"/>
-            </g>
-            <g fill="var(--accent-soft)">
-              <circle cx="17" cy="17" r="7"/>
-              <circle cx="47" cy="17" r="7"/>
-              <circle cx="17" cy="47" r="7"/>
-              <circle cx="47" cy="47" r="7"/>
-            </g>
-            <!-- 会合点：白点 + 一圈细描边（不用大面积光晕，小尺寸下会糊成脏圈） -->
-            <circle cx="32" cy="32" r="10.5" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".75"/>
-            <circle cx="32" cy="32" r="5.5" fill="#fff"/>
-          </svg>
-          <span class="wordmark">xtun<span class="dot">.</span></span>
-        </div>
-        <h1>出门在外，<br>也能回到<span class="grad">自己的电脑</span></h1>
-        <!--
-          ⚠️ 「内网 / 外网」是故意留的双关，别去澄清（见文件头的口径说明）。
-        -->
-        <p class="tagline">内网外网，一键打通<span class="dot">.</span></p>
-        <p class="lead">
-          在要访问的那台电脑上跑一条命令，它就会<b>主动连出去</b>；
-          之后无论你在公司、在咖啡厅还是在手机上，打开浏览器就能用上它 ——
-          远程桌面、内网网站、命令行终端，都在这一个页面里。
-        </p>
-        <!--
-          ⚠️ 这里**只有一个**「进入控制台」按钮，就是右上角那个 `.enter`（用户要求：
-             别在页面上摆太多同一个入口）。它 DOM 上放在这里，是为了小屏改成 static 时
-             落在文案流里、而不是跑到徽标上面去。
-          下面这个是「往下看」的次要动作，不是登录入口。
-        -->
-        <a class="enter" href="https://xtun.dev/login">进入控制台 →</a>
-        <div class="cta">
-          <a class="btn btn-ghost" href="#what">看看能做什么</a>
-        </div>
+    <div class="deck">
+      <!--
+        ⚠️ 幻灯片的「状态」就是这两个 radio：下面每页的显隐、圆点的亮暗全靠 :checked。
+           **没有一行 JS**（本页不许有脚本，见文件头说明）。
+        ⚠️ 不要在 <body> 上加 dblclick / touchstart —— 那是网关注入的登录手势。
+      -->
+      <input class="deck-radio" type="radio" name="hero-slide" id="hero-s1">
+      <input class="deck-radio" type="radio" name="hero-slide" id="hero-s2">
+
+      <div class="slides">
+        <!-- ---------- 第 1 页：回家（反向隧道 / 内网穿透） ---------- -->
+        <article class="slide slide-a">
+          <div class="slide-grid">
+            <div>
+              <!--
+                ⚠️「不用公网 IP …」这一行原来在页面最顶上（用户 2026-10-12 要求移下来）：
+                   它讲的是【内网穿透】这一件事，所以放在这一页里而不是页首。
+              -->
+              <p class="badge"><span class="pip"></span>不用公网 IP · 不用端口映射 · 不装 App</p>
+              <h1>出门在外，<br>也能回到<span class="grad">自己的电脑</span></h1>
+              <!-- ⚠️「内网 / 外网」是故意留的双关，别去澄清 -->
+              <p class="tagline">内网外网，一键打通<span class="dot">.</span></p>
+              <p class="lead">
+                在要访问的那台电脑上跑一条命令，它就会<b>主动连出去</b>；
+                之后无论你在公司、在咖啡厅还是在手机上，打开浏览器就能用上它 ——
+                远程桌面、内网网站、命令行终端，都在这一个页面里。
+              </p>
+              <div class="chiprow">
+                <span class="chip">VNC</span><span class="chip">RDP</span><span class="chip">Web SSH</span><span class="chip">HTTP 穿透</span>
+              </div>
+            </div>
+
+            <!--
+              插图：左「内网里的几台机器」→ 中「会合点」→ 右「任何浏览器」。
+              ⚠️ 右侧那台浏览器里的「打开就能用」**就是全站唯一的登录入口**
+                 （用户要求：不要摆明显的「进入控制台」按钮）。它是个 SVG 里的 <a>，
+                  外加一块透明的扩大点击区（手机上徒手点得中）。
+                 role="group" 而不是 role="img"：否则内层这个链接对读屏器不可见。
+            -->
+            <svg class="hero-art" viewBox="0 0 560 400" role="group" aria-label="内网里的电脑与服务器，经会合点，被任何浏览器访问">
+              <defs>
+                <linearGradient id="gPanel" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#22222b"/><stop offset="1" stop-color="#1a1a21"/>
+                </linearGradient>
+                <linearGradient id="gCloud" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#2b3350"/><stop offset="1" stop-color="#1d2135"/>
+                </linearGradient>
+                <linearGradient id="gAccent" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#93a8ff"/><stop offset="1" stop-color="#5b7cfa"/>
+                </linearGradient>
+              </defs>
+
+              <!-- 连线（先画，压在面板下面） -->
+              <path class="flow" d="M176 206 H250" stroke="#5b7cfa" stroke-width="2.2" fill="none" opacity=".85"/>
+              <path class="flow" d="M330 206 H392" stroke="#5b7cfa" stroke-width="2.2" fill="none" opacity=".85"/>
+              <path class="flow" d="M176 148 C214 118 250 120 286 150" stroke="#93a8ff" stroke-width="1.6" fill="none" opacity=".45"/>
+              <path class="flow" d="M176 264 C214 294 250 292 286 262" stroke="#93a8ff" stroke-width="1.6" fill="none" opacity=".45"/>
+
+              <!-- 左：内网里的机器 -->
+              <g>
+                <rect x="16" y="96" width="160" height="220" rx="16" fill="url(#gPanel)" stroke="#2e2e37"/>
+                <text x="34" y="124" fill="#9a9aa5" font-size="12" font-family="ui-monospace,Menlo,monospace">内网</text>
+                <g fill="#17171c" stroke="#33333f">
+                  <rect x="30" y="138" width="132" height="42" rx="10"/>
+                  <rect x="30" y="192" width="132" height="42" rx="10"/>
+                  <rect x="30" y="246" width="132" height="42" rx="10"/>
+                </g>
+                <g fill="none" stroke="#93a8ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="42" y="151" width="17" height="12" rx="2"/><path d="M48 167h5M50.5 163v4"/>
+                  <rect x="42" y="205" width="17" height="11" rx="2"/><path d="M42 219h17"/>
+                  <path d="M42 258h17v9H42z"/><path d="M46 262h1.5M51 262h1.5M56 262h1.5"/>
+                </g>
+                <g fill="#c9c9d4" font-size="12.5">
+                  <text x="68" y="164">家里的电脑</text>
+                  <text x="68" y="218">笔记本</text>
+                  <text x="68" y="271">NAS / 服务器</text>
+                </g>
+              </g>
+
+              <!-- 中：会合点 -->
+              <g>
+                <ellipse class="pulse halo" cx="280" cy="206" rx="62" ry="62" fill="#5b7cfa" opacity=".3"/>
+                <path d="M236 232c-13 0-23-9-23-21 0-11 9-20 20-20 3-14 15-24 29-24 15 0 27 10 30 24 12 0 22 9 22 20 0 12-10 21-23 21z"
+                      fill="url(#gCloud)" stroke="#3d4a75" stroke-width="1.4"/>
+                <circle cx="280" cy="206" r="24" fill="none" stroke="#5b7cfa" stroke-width="2" opacity=".7"/>
+                <circle cx="280" cy="206" r="13" fill="none" stroke="#93a8ff" stroke-width="2" opacity=".55"/>
+                <circle cx="280" cy="206" r="6" fill="#fff"/>
+                <text x="280" y="346" text-anchor="middle" fill="#9a9aa5" font-size="11.5">会合点（Cloudflare 或你的 VPS）</text>
+              </g>
+
+              <!-- 右：任何浏览器（这里的「打开就能用」是登录入口） -->
+              <g>
+                <rect x="392" y="86" width="152" height="240" rx="18" fill="url(#gPanel)" stroke="#2e2e37"/>
+                <rect x="410" y="108" width="116" height="150" rx="10" fill="#131318" stroke="#33333f"/>
+                <circle cx="424" cy="122" r="3" fill="#3d3d4b"/><circle cx="434" cy="122" r="3" fill="#3d3d4b"/><circle cx="444" cy="122" r="3" fill="#3d3d4b"/>
+                <path d="M422 137h92" stroke="#2b2b34" stroke-width="6" stroke-linecap="round"/>
+                <g fill="#1c1c23" stroke="#2e2e37">
+                  <rect x="420" y="152" width="96" height="26" rx="7"/>
+                  <rect x="420" y="184" width="96" height="26" rx="7"/>
+                  <rect x="420" y="216" width="96" height="26" rx="7"/>
+                </g>
+                <g fill="#86efac"><circle cx="431" cy="165" r="3"/><circle cx="431" cy="197" r="3"/><circle cx="431" cy="229" r="3"/></g>
+                <g fill="#c9c9d4" font-size="10.5">
+                  <text x="441" y="169">电脑桌面</text>
+                  <text x="441" y="201">内网网站</text>
+                  <text x="441" y="233">终端</text>
+                </g>
+                <!--
+                  登录入口：外观刻意就是浏览器 mock 里的一个普通按钮，不夸张、不发光 ——
+                  用户不想让无关的人一眼把它当「入口」。透明的大矩形把可点区域
+                  扩到约 160×70（viewBox 单位），手机上也好点。
+                -->
+                <a href="https://xtun.dev/login" aria-label="进入控制台">
+                  <rect x="388" y="254" width="160" height="70" fill="transparent"/>
+                  <rect x="410" y="272" width="116" height="34" rx="10" fill="url(#gAccent)" opacity=".72"/>
+                  <text x="468" y="294" text-anchor="middle" fill="#0f1020" font-size="12.5" font-weight="700">打开就能用</text>
+                </a>
+                <text x="468" y="352" text-anchor="middle" fill="#9a9aa5" font-size="12">任何浏览器 / 手机</text>
+              </g>
+            </svg>
+          </div>
+        </article>
+
+        <!-- ---------- 第 2 页：出门（正向代理 / 线路优选） ---------- -->
+        <article class="slide slide-b">
+          <div class="slide-grid">
+            <div>
+              <p class="badge"><span class="pip"></span>线路优选 · 统一出口 · 按需切换</p>
+              <h2 class="hero-h2">路不好走的时候，<br>换一条<span class="grad">更顺的</span></h2>
+              <p class="tagline">同一趟访问，可以走得更稳一点<span class="dot">.</span></p>
+              <p class="lead">
+                在要上网的那台机器上起一个代理端口，浏览器或程序配一次就行 ——
+                出口在服务器侧，几台机器还能共用同一条线路。
+                网络不稳时先扫一遍，挑出当下更快的那条；之后它会自动定期重挑，
+                你的用法完全不用改。
+              </p>
+              <div class="chiprow">
+                <span class="chip">SOCKS5</span><span class="chip">线路优选</span><span class="chip">统一出口</span>
+              </div>
+            </div>
+
+            <!--
+              插图：左「本机」→ 中「一批候选线路，其中一条更顺」→ 右「目标网站」。
+              讲的是「同一趟访问，线路可以换」——不提具体地域，也不出现被排除的说法。
+            -->
+            <svg class="hero-art" viewBox="0 0 560 400" role="img" aria-label="本机的访问在多条候选线路中自动挑选更快的一条，再到达目标网站">
+              <defs>
+                <linearGradient id="gPanel2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#22222b"/><stop offset="1" stop-color="#1a1a21"/>
+                </linearGradient>
+                <linearGradient id="gCloud2" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#2b3350"/><stop offset="1" stop-color="#1d2135"/>
+                </linearGradient>
+              </defs>
+
+              <!-- 候选线路：四条虚线，只有一条是亮的（快的） -->
+              <g fill="none" stroke="#33333f" stroke-width="1.6" stroke-dasharray="6 8">
+                <path d="M136 200 C186 200 200 104 248 104"/>
+                <path d="M136 200 C186 200 200 152 248 152"/>
+                <path d="M136 200 C186 200 200 248 248 248"/>
+                <path d="M136 200 C186 200 200 296 248 296"/>
+              </g>
+              <g fill="none" stroke="#33333f" stroke-width="1.6" stroke-dasharray="6 8">
+                <path d="M266 104 C330 104 360 176 396 176"/>
+                <path d="M266 152 C330 152 360 182 396 182"/>
+                <path d="M266 248 C330 248 360 218 396 218"/>
+                <path d="M266 296 C330 296 360 224 396 224"/>
+              </g>
+              <!-- 选中的那条：亮色 + 流动 -->
+              <path class="flow" d="M136 200 C186 200 200 152 248 152" stroke="#5b7cfa" stroke-width="2.6" fill="none"/>
+              <path class="flow" d="M266 152 C330 152 360 182 396 182" stroke="#5b7cfa" stroke-width="2.6" fill="none"/>
+
+              <!-- 左：本机 -->
+              <g>
+                <rect x="16" y="150" width="120" height="100" rx="14" fill="url(#gPanel2)" stroke="#2e2e37"/>
+                <g fill="none" stroke="#93a8ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="46" y="176" width="34" height="22" rx="3"/>
+                  <path d="M40 206h46"/>
+                </g>
+                <text x="76" y="238" text-anchor="middle" fill="#c9c9d4" font-size="11.5">本机</text>
+                <text x="76" y="272" text-anchor="middle" fill="#9a9aa5" font-size="11.5">多个程序共用</text>
+              </g>
+
+              <!-- 中：候选入口 -->
+              <g>
+                <g fill="#1c1c23" stroke="#33333f">
+                  <circle cx="257" cy="104" r="11"/>
+                  <circle cx="257" cy="248" r="11"/>
+                  <circle cx="257" cy="296" r="11"/>
+                </g>
+                <circle cx="257" cy="152" r="14" fill="#1b2138" stroke="#5b7cfa" stroke-width="2.2"/>
+                <circle cx="257" cy="152" r="5" fill="#fff"/>
+                <text x="257" y="336" text-anchor="middle" fill="#9a9aa5" font-size="11.5">一批候选入口</text>
+              </g>
+
+              <!-- 延迟标签：亮的那条更快（数字取自实测：最优 108ms vs 平均 341ms） -->
+              <g font-size="11" font-family="ui-monospace,Menlo,monospace">
+                <rect x="278" y="126" width="62" height="19" rx="6" fill="rgba(91,124,250,.18)" stroke="rgba(91,124,250,.5)"/>
+                <text x="309" y="139" text-anchor="middle" fill="#93a8ff">108ms</text>
+                <rect x="278" y="268" width="62" height="19" rx="6" fill="rgba(255,255,255,.04)" stroke="#33333f"/>
+                <text x="309" y="281" text-anchor="middle" fill="#7c7c8a">341ms</text>
+              </g>
+
+              <!-- 右：目标网站 -->
+              <g>
+                <circle cx="440" cy="200" r="46" fill="url(#gCloud2)" stroke="#3d4a75" stroke-width="1.4"/>
+                <g fill="none" stroke="#93a8ff" stroke-width="1.6" opacity=".8">
+                  <circle cx="440" cy="200" r="20"/>
+                  <path d="M420 200h40M440 180c6 6 9 12 9 20s-3 14-9 20c-6-6-9-12-9-20s3-14 9-20Z"/>
+                </g>
+                <text x="440" y="272" text-anchor="middle" fill="#9a9aa5" font-size="12">目标网站</text>
+              </g>
+
+              <text x="280" y="372" text-anchor="middle" fill="#9a9aa5" font-size="11.5">先扫一遍挑出更顺的那条；之后自动定期重挑</text>
+            </svg>
+          </div>
+        </article>
       </div>
 
-      <!--
-        插图：左「内网里的几台机器」→ 中「会合点」→ 右「任何浏览器」。
-        全部内联 SVG（无外部图片、无脚本）；虚线用 CSS 动画在跑，
-        系统开了「减少动态效果」时会自动停下（见 prefers-reduced-motion）。
-      -->
-      <svg class="hero-art" viewBox="0 0 560 400" role="img" aria-label="内网里的电脑与服务器，经会合点，被任何浏览器访问">
-        <defs>
-          <linearGradient id="gPanel" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#22222b"/><stop offset="1" stop-color="#1a1a21"/>
-          </linearGradient>
-          <linearGradient id="gCloud" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#2b3350"/><stop offset="1" stop-color="#1d2135"/>
-          </linearGradient>
-          <linearGradient id="gAccent" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#93a8ff"/><stop offset="1" stop-color="#5b7cfa"/>
-          </linearGradient>
-        </defs>
-
-        <!-- 连线（先画，压在面板下面） -->
-        <path class="flow" d="M176 206 H250" stroke="#5b7cfa" stroke-width="2.2" fill="none" opacity=".85"/>
-        <path class="flow" d="M330 206 H392" stroke="#5b7cfa" stroke-width="2.2" fill="none" opacity=".85"/>
-        <path class="flow" d="M176 148 C214 118 250 120 286 150" stroke="#93a8ff" stroke-width="1.6" fill="none" opacity=".45"/>
-        <path class="flow" d="M176 264 C214 294 250 292 286 262" stroke="#93a8ff" stroke-width="1.6" fill="none" opacity=".45"/>
-
-        <!-- 左：内网里的机器 -->
-        <g>
-          <rect x="16" y="96" width="160" height="220" rx="16" fill="url(#gPanel)" stroke="#2e2e37"/>
-          <text x="34" y="124" fill="#9a9aa5" font-size="12" font-family="ui-monospace,Menlo,monospace">内网</text>
-          <g fill="#17171c" stroke="#33333f">
-            <rect x="30" y="138" width="132" height="42" rx="10"/>
-            <rect x="30" y="192" width="132" height="42" rx="10"/>
-            <rect x="30" y="246" width="132" height="42" rx="10"/>
-          </g>
-          <g fill="none" stroke="#93a8ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="42" y="151" width="17" height="12" rx="2"/><path d="M48 167h5M50.5 163v4"/>
-            <rect x="42" y="205" width="17" height="11" rx="2"/><path d="M42 219h17"/>
-            <path d="M42 258h17v9H42z"/><path d="M46 262h1.5M51 262h1.5M56 262h1.5"/>
-          </g>
-          <g fill="#c9c9d4" font-size="12.5">
-            <text x="68" y="164">家里的电脑</text>
-            <text x="68" y="218">笔记本</text>
-            <text x="68" y="271">NAS / 服务器</text>
-          </g>
-        </g>
-
-        <!-- 中：会合点 -->
-        <g>
-          <ellipse class="pulse halo" cx="280" cy="206" rx="62" ry="62" fill="#5b7cfa" opacity=".3"/>
-          <path d="M236 232c-13 0-23-9-23-21 0-11 9-20 20-20 3-14 15-24 29-24 15 0 27 10 30 24 12 0 22 9 22 20 0 12-10 21-23 21z"
-                fill="url(#gCloud)" stroke="#3d4a75" stroke-width="1.4"/>
-          <circle cx="280" cy="206" r="24" fill="none" stroke="#5b7cfa" stroke-width="2" opacity=".7"/>
-          <circle cx="280" cy="206" r="13" fill="none" stroke="#93a8ff" stroke-width="2" opacity=".55"/>
-          <circle cx="280" cy="206" r="6" fill="#fff"/>
-          <text x="280" y="346" text-anchor="middle" fill="#9a9aa5" font-size="11.5">会合点（Cloudflare 或你的 VPS）</text>
-        </g>
-
-        <!-- 右：任何浏览器 -->
-        <g>
-          <rect x="392" y="86" width="152" height="240" rx="18" fill="url(#gPanel)" stroke="#2e2e37"/>
-          <rect x="410" y="108" width="116" height="150" rx="10" fill="#131318" stroke="#33333f"/>
-          <circle cx="424" cy="122" r="3" fill="#3d3d4b"/><circle cx="434" cy="122" r="3" fill="#3d3d4b"/><circle cx="444" cy="122" r="3" fill="#3d3d4b"/>
-          <path d="M422 137h92" stroke="#2b2b34" stroke-width="6" stroke-linecap="round"/>
-          <g fill="#1c1c23" stroke="#2e2e37">
-            <rect x="420" y="152" width="96" height="26" rx="7"/>
-            <rect x="420" y="184" width="96" height="26" rx="7"/>
-            <rect x="420" y="216" width="96" height="26" rx="7"/>
-          </g>
-          <g fill="#86efac"><circle cx="431" cy="165" r="3"/><circle cx="431" cy="197" r="3"/><circle cx="431" cy="229" r="3"/></g>
-          <g fill="#c9c9d4" font-size="10.5">
-            <text x="441" y="169">电脑桌面</text>
-            <text x="441" y="201">内网网站</text>
-            <text x="441" y="233">终端</text>
-          </g>
-          <rect x="410" y="272" width="116" height="34" rx="10" fill="url(#gAccent)" opacity=".92"/>
-          <text x="468" y="294" text-anchor="middle" fill="#0f1020" font-size="12.5" font-weight="700">打开就能用</text>
-          <text x="468" y="352" text-anchor="middle" fill="#9a9aa5" font-size="12">任何浏览器 / 手机</text>
-        </g>
-      </svg>
+      <!-- 圆点：点它切换（label 是纯 CSS 的开关，不需要脚本） -->
+      <div class="dots">
+        <label for="hero-s1" aria-label="第一页：回家（内网穿透）"></label>
+        <label for="hero-s2" aria-label="第二页：出门（线路优选）"></label>
+      </div>
     </div>
   </div>
 </div>
@@ -432,6 +591,13 @@
     <h2>四件事，一个入口</h2>
     <p class="sub">打开控制台，你的设备会列在一张清单里 —— 点一下就连上。不用记地址，也不用装客户端。</p>
 
+    <!--
+      ⚠️ 卡片顺序（用户 2026-10-12 要求「远程桌面和 ssh 挨在一起讲比较好」）：
+         远程桌面 → 浏览器里的终端 → 内网网站 → 换个出口。
+         前三张都是「回家」（反向隧道，出口在你自己的机器），最后一张是「出门」
+         （正向代理）。**别把前两张拆开** —— 它们讲的是同一件事的两种形态：
+         操控某一台机器（图形界面 / 命令行）。
+    -->
     <div class="cards">
       <article class="card">
         <div class="ico"><svg aria-hidden="true"><use href="#i-desktop"/></svg></div>
@@ -442,14 +608,6 @@
         <div class="chips"><span class="chip">VNC</span><span class="chip">RDP</span><span class="chip">Windows / macOS / Linux</span></div>
       </article>
 
-      <article class="card">
-        <div class="ico"><svg aria-hidden="true"><use href="#i-globe"/></svg></div>
-        <h3>内网网站，给个网址</h3>
-        <p class="when">在外网也能打开它</p>
-        <p>NAS 管理页、路由器后台、自己搭的服务……挂上去就有一个能从外网打开的网址；
-           网页里的实时刷新、长连接也照常工作。</p>
-        <div class="chips"><span class="chip">HTTP</span><span class="chip">WebSocket</span><span class="chip">流式响应</span></div>
-      </article>
 
       <article class="card">
         <div class="ico"><svg aria-hidden="true"><use href="#i-terminal"/></svg></div>
@@ -458,6 +616,15 @@
         <p>在手机或任意电脑上打开一个网页终端就能敲命令。
            登录用公钥，第一次连接请你确认一次指纹，之后不再打扰。</p>
         <div class="chips"><span class="chip">Web SSH</span><span class="chip">公钥登录</span><span class="chip">可调字号</span></div>
+      </article>
+
+      <article class="card">
+        <div class="ico"><svg aria-hidden="true"><use href="#i-globe"/></svg></div>
+        <h3>内网网站，给个网址</h3>
+        <p class="when">在外网也能打开它</p>
+        <p>NAS 管理页、路由器后台、自己搭的服务……挂上去就有一个能从外网打开的网址；
+           网页里的实时刷新、长连接也照常工作。</p>
+        <div class="chips"><span class="chip">HTTP</span><span class="chip">WebSocket</span><span class="chip">流式响应</span></div>
       </article>
 
       <article class="card">
